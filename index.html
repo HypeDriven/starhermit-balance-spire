@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Balance Spire</title>
+<meta name="description" content="Drop sliding slabs to build the tallest stable luminous tower. Overhangs are trimmed.">
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='6' y='24' width='20' height='5' rx='1' fill='%23bfb4a6'/%3E%3Crect x='9' y='17' width='14' height='5' rx='1' fill='%23ffd9a0'/%3E%3Crect x='12' y='10' width='8' height='5' rx='1' fill='%23bfb4a6'/%3E%3C/svg%3E">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to game</a>
+
+<div id="app" data-screen="boot">
+
+  <!-- ============ 3D playfield (fills the game region; never the only UI) ============ -->
+  <div id="playfield" role="application" aria-label="Balance Spire playfield">
+    <div id="gl-host"></div>
+    <div id="gl-fallback" class="panel" hidden>
+      <h2>3D unavailable</h2>
+      <p>Balance Spire needs WebGL for its 3D playfield. Your progress and settings are safe.
+         Try a browser with WebGL enabled.</p>
+    </div>
+    <!-- Accessible text mirror of the board state -->
+    <div id="board-mirror" class="visually-hidden" role="status"></div>
+    <div id="live" class="visually-hidden" aria-live="polite"></div>
+    <div id="live-assertive" class="visually-hidden" aria-live="assertive"></div>
+
+    <!-- Countdown overlay -->
+    <div id="countdown" class="overlay center" hidden aria-hidden="true"><span id="countdown-num"></span></div>
+
+    <!-- Hint / captions strip -->
+    <div id="caption" class="caption" hidden></div>
+  </div>
+
+  <!-- ============ HUD (play state) ============ -->
+  <header id="hud" class="hud" hidden>
+    <div class="hud-left">
+      <h1 class="hud-objective" id="hud-objective">Build upward</h1>
+      <p class="hud-progress" id="hud-progress"></p>
+    </div>
+    <div class="hud-right">
+      <div class="hud-stat"><span class="label">Height</span><span id="hud-height">0</span></div>
+      <div class="hud-stat"><span class="label">Score</span><span id="hud-score">0</span></div>
+      <div class="hud-stat" id="hud-streak-wrap"><span class="label">Streak</span><span id="hud-streak">0</span></div>
+      <div class="hud-stat" id="hud-drops-wrap" hidden><span class="label">Drops left</span><span id="hud-drops">–</span></div>
+      <div class="hud-stat" id="hud-time-wrap" hidden><span class="label">Time</span><span id="hud-time">–</span></div>
+      <div class="hud-stat" id="hud-lives-wrap" hidden><span class="label">Spare slabs</span><span id="hud-lives">–</span></div>
+    </div>
+  </header>
+
+  <!-- Bottom thumb-zone action tray -->
+  <nav id="tray" class="tray" hidden aria-label="Round actions">
+    <button id="btn-drop" class="btn primary big" type="button">Drop <kbd>Space</kbd></button>
+    <button id="btn-hint" class="btn" type="button" title="Mark the perfect window">Hint <kbd>H</kbd></button>
+    <button id="btn-undo" class="btn" type="button" title="Take back the last drop">Undo <kbd>U</kbd></button>
+    <button id="btn-pause" class="btn" type="button">Pause <kbd>P</kbd></button>
+  </nav>
+
+  <!-- ============ Screens ============ -->
+  <main id="main">
+
+    <section id="screen-title" class="screen center" data-screen="title" aria-labelledby="title-h">
+      <div class="title-card">
+        <h1 id="title-h" class="game-title">Balance&nbsp;Spire</h1>
+        <p class="tagline">A peaceful skyline, one slab at a time.</p>
+        <button id="btn-play" class="btn primary big" type="button">Play</button>
+        <div class="title-row">
+          <button id="btn-daily" class="btn" type="button">Daily challenge</button>
+          <button id="btn-journey" class="btn" type="button">Journey</button>
+          <button id="btn-learn" class="btn" type="button">Learn</button>
+        </div>
+        <div class="title-row">
+          <button id="btn-help" class="btn subtle" type="button">How to play</button>
+          <button id="btn-boards" class="btn subtle" type="button">Leaderboards</button>
+          <button id="btn-settings" class="btn subtle" type="button">Settings</button>
+        </div>
+        <p id="title-progress" class="dim"></p>
+        <p id="title-net" class="dim" role="status"></p>
+      </div>
+    </section>
+
+    <section id="screen-modes" class="screen" data-screen="mode-select" hidden aria-labelledby="modes-h">
+      <h2 id="modes-h">Choose a mode</h2>
+      <div class="card-grid" id="mode-cards">
+        <button class="card" data-mode="journey" type="button">
+          <strong>Journey</strong><span>40 authored stages, growing pressure.</span><em id="journey-status"></em>
+        </button>
+        <button class="card" data-mode="daily" type="button">
+          <strong>Daily</strong><span>One shared seed per UTC day. Ranked.</span><em id="daily-status"></em>
+        </button>
+        <button class="card" data-mode="practice" type="button">
+          <strong>Practice</strong><span>Relaxed. Undo, hints, no rating.</span>
+        </button>
+        <button class="card" data-mode="challenge" type="button">
+          <strong>Challenge</strong><span>Tight constraints: clocks, limits, hairlines.</span>
+        </button>
+        <button class="card" data-mode="score" type="button">
+          <strong>Score chase</strong><span>Endless. Compare on the boards.</span><em id="score-status"></em>
+        </button>
+        <button class="card" data-mode="learn" type="button">
+          <strong>Learn</strong><span>Five short interactive lessons.</span><em id="learn-status"></em>
+        </button>
+      </div>
+      <button class="btn subtle back" data-back type="button">Back</button>
+    </section>
+
+    <section id="screen-setup" class="screen" data-screen="setup" hidden aria-labelledby="setup-h">
+      <h2 id="setup-h">Stage setup</h2>
+      <div id="setup-info" class="panel"></div>
+      <div id="setup-list" class="list"></div>
+      <div class="row">
+        <button id="btn-start" class="btn primary big" type="button">Start</button>
+        <button class="btn subtle back" data-back type="button">Back</button>
+      </div>
+    </section>
+
+    <section id="screen-pause" class="screen sheet" data-screen="paused" hidden aria-labelledby="pause-h">
+      <h2 id="pause-h">Paused</h2>
+      <div class="col">
+        <button id="btn-resume" class="btn primary big" type="button">Resume</button>
+        <button id="btn-pause-settings" class="btn" type="button">Settings</button>
+        <button id="btn-pause-help" class="btn" type="button">How to play</button>
+        <button id="btn-restart" class="btn" type="button">Restart round</button>
+        <button id="btn-leave" class="btn danger" type="button">Leave round</button>
+      </div>
+    </section>
+
+    <section id="screen-results" class="screen sheet" data-screen="results" hidden aria-labelledby="results-h">
+      <h2 id="results-h">Round over</h2>
+      <p id="results-headline" class="headline"></p>
+      <table class="score-table" id="score-table">
+        <caption>Score breakdown</caption>
+        <tbody></tbody>
+        <tfoot><tr><th scope="row">Total</th><td id="score-total">0</td></tr></tfoot>
+      </table>
+      <p id="results-progress" class="dim"></p>
+      <p id="results-board" class="dim" role="status"></p>
+      <ul id="results-achievements" class="badges"></ul>
+      <div class="row">
+        <button id="btn-retry" class="btn primary" type="button">Retry</button>
+        <button id="btn-next" class="btn" type="button" hidden>Next stage</button>
+        <button id="btn-results-modes" class="btn subtle" type="button">Modes</button>
+      </div>
+    </section>
+
+    <section id="screen-settings" class="screen sheet" data-screen="settings" hidden aria-labelledby="settings-h">
+      <h2 id="settings-h">Settings</h2>
+      <form id="settings-form" class="settings-grid">
+        <fieldset>
+          <legend>Audio</legend>
+          <label>Music <input type="range" name="volMusic" min="0" max="100" step="1"></label>
+          <label>Effects <input type="range" name="volEffects" min="0" max="100" step="1"></label>
+          <label>Ambience <input type="range" name="volAmbience" min="0" max="100" step="1"></label>
+          <label>Voice cues <input type="range" name="volVoice" min="0" max="100" step="1"></label>
+          <label><input type="checkbox" name="captions"> Captions for meaningful audio</label>
+        </fieldset>
+        <fieldset>
+          <legend>Graphics</legend>
+          <label>Quality tier
+            <select name="quality">
+              <option value="auto">Auto</option><option value="high">High</option>
+              <option value="medium">Medium</option><option value="low">Low</option>
+            </select></label>
+          <label><input type="checkbox" name="reducedMotion"> Reduced motion</label>
+          <label><input type="checkbox" name="highContrast"> High contrast</label>
+          <label><input type="checkbox" name="largeText"> Larger text</label>
+        </fieldset>
+        <fieldset>
+          <legend>Controls &amp; access</legend>
+          <label><input type="checkbox" name="leftHanded"> Left-handed tray</label>
+          <label><input type="checkbox" name="holdToDrop"> Hold-to-confirm drops</label>
+          <label><input type="checkbox" name="timingAssist"> Show perfect-window marker</label>
+          <label><input type="checkbox" name="haptics" checked> Haptics</label>
+          <button id="btn-replay-tutorial" class="btn" type="button">Replay tutorial</button>
+        </fieldset>
+        <fieldset>
+          <legend>Privacy</legend>
+          <label><input type="checkbox" name="analytics"> Share anonymous usage funnels</label>
+        </fieldset>
+      </form>
+      <button class="btn subtle back" data-back type="button">Done</button>
+    </section>
+
+    <section id="screen-help" class="screen sheet" data-screen="help" hidden aria-labelledby="help-h">
+      <h2 id="help-h">How to play</h2>
+      <div id="help-cards" class="card-grid"></div>
+      <button class="btn subtle back" data-back type="button">Back</button>
+    </section>
+
+    <section id="screen-board" class="screen sheet" data-screen="board" hidden aria-labelledby="board-h">
+      <h2 id="board-h">Leaderboard</h2>
+      <div id="board-body" class="panel" role="status"></div>
+      <button class="btn subtle back" data-back type="button">Back</button>
+    </section>
+
+  </main>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+</div>
+
+<script src="js/rng.js"></script>
+<script src="js/rules.js"></script>
+<script src="js/content.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/platform.js"></script>
+<script src="js/session.js"></script>
+<script src="js/ui.js"></script>
+<script type="module" src="js/render.js"></script>
+<script src="js/bootstrap.js"></script>
+</body>
+</html>

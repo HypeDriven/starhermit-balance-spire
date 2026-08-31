@@ -1,0 +1,74 @@
+[
+  {
+    "name": "ui-ack",
+    "seconds": 1,
+    "prompt": "Short dry wooden UI button click, single soft tap on a small wooden panel, quick and quiet with no reverb.",
+    "event": "ack"
+  },
+  {
+    "name": "slab-place",
+    "seconds": 1,
+    "prompt": "Heavy stone slab landing on stone with a low dull thud, short dusty impact tail, solid masonry weight.",
+    "event": "place"
+  },
+  {
+    "name": "perfect-chime",
+    "seconds": 2,
+    "prompt": "Stone slab thud immediately followed by three bright ascending glass chime tones, crystalline shimmer, rewarding and clean.",
+    "event": "perfect"
+  },
+  {
+    "name": "overhang-trim",
+    "seconds": 1,
+    "prompt": "Stone edge shearing off with a gritty scrape, small rock fragments crumbling and falling, brief rocky debris.",
+    "event": "trim"
+  },
+  {
+    "name": "slab-miss",
+    "seconds": 2,
+    "prompt": "Stone block tumbling past a tower and clattering down rocks, fading hollow bounces into the distance.",
+    "event": "miss"
+  },
+  {
+    "name": "stage-win",
+    "seconds": 3,
+    "prompt": "Triumphant ascending bell fanfare of five warm tones, brass and glass chimes rising together, gentle celebratory shimmer.",
+    "event": "win"
+  },
+  {
+    "name": "round-lose",
+    "seconds": 2,
+    "prompt": "Three slow descending muted marimba notes, soft wooden disappointed cadence, calm and low.",
+    "event": "lose"
+  },
+  {
+    "name": "drop-undo",
+    "seconds": 1,
+    "prompt": "Quick airy reverse whoosh, a stone slab sliding smoothly back upward, soft swooping suction.",
+    "event": "undo"
+  },
+  {
+    "name": "hint-ping",
+    "seconds": 1,
+    "prompt": "Delicate high glass ping, single soft bell tap with a gentle shimmering decay, subtle and bright.",
+    "event": "hint"
+  },
+  {
+    "name": "count-tick",
+    "seconds": 1,
+    "prompt": "Short dry metronome tick, single wooden block knock, crisp and neutral countdown beat.",
+    "event": "count"
+  },
+  {
+    "name": "count-go",
+    "seconds": 1,
+    "prompt": "Bright wooden clave strike with an energetic rising snap, punchy start signal.",
+    "event": "go"
+  },
+  {
+    "name": "achievement-chime",
+    "seconds": 2,
+    "prompt": "Sparkling three-note celesta flourish, cheerful badge-unlock chime with light magical glitter.",
+    "event": "achievement"
+  }
+]
