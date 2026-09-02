@@ -18,6 +18,9 @@ window.BSUI = (function (root) {
   var lastFocus = null;
   var pendingSetup = null;   // {mode, cfg, lesson}
   var setupListMode = null;
+  var setupItems = [];       // full list for the open setup screen
+  var setupPage = 0;
+  var SETUP_PAGE_SIZE = 8;   // fits both desktop and mobile viewports without overflow
   var prevPhase = null;
 
   function $(id) { return document.getElementById(id); }
@@ -30,6 +33,7 @@ window.BSUI = (function (root) {
      'board-mirror', 'hud-objective', 'hud-progress', 'hud-height', 'hud-score', 'hud-streak',
      'hud-drops', 'hud-time', 'hud-lives', 'hud-drops-wrap', 'hud-time-wrap', 'hud-lives-wrap',
      'hud-streak-wrap', 'setup-info', 'setup-list', 'setup-h', 'btn-start', 'results-h',
+     'setup-pager', 'setup-prev', 'setup-next', 'setup-page',
      'results-headline', 'results-progress', 'results-board', 'results-achievements',
      'score-total', 'score-table', 'btn-next', 'title-progress', 'title-net', 'daily-status',
      'journey-status', 'learn-status', 'score-status', 'board-body', 'board-h', 'help-cards',
@@ -150,6 +154,8 @@ window.BSUI = (function (root) {
     el.btnStart.addEventListener('click', function () {
       if (pendingSetup && pendingSetup.cfg) commitStart(pendingSetup);
     });
+    el.setupPrev.addEventListener('click', function () { setupPage--; renderSetupList(); });
+    el.setupNext.addEventListener('click', function () { setupPage++; renderSetupList(); });
     $('btn-drop').addEventListener('click', function () { doDrop(); });
     $('btn-hint').addEventListener('click', function () { doHint(); });
     $('btn-undo').addEventListener('click', function () { if (S.undo()) A.event('undo'); });
@@ -251,23 +257,37 @@ window.BSUI = (function (root) {
       });
     }
     el.setupInfo.textContent = info;
-    el.setupList.innerHTML = '';
-    list.forEach(function (item) {
-      var b = document.createElement('button');
-      b.type = 'button';
-      if (!item.unlocked) b.className = 'locked';
-      if (item.current) b.classList.add('current');
-      var l = document.createElement('span'); l.textContent = item.label;
-      var r = document.createElement('span'); r.className = 'stars'; r.textContent = item.right || '';
-      b.appendChild(l); b.appendChild(r);
-      b.disabled = !item.unlocked;
-      b.addEventListener('click', function () {
-        commitStart({ mode: mode, cfg: item.cfg, lesson: item.lesson || null });
-      });
-      el.setupList.appendChild(b);
-    });
+    setupItems = list;
+    var currentIdx = list.findIndex(function (item) { return item.current; });
+    setupPage = currentIdx > 0 ? Math.floor(currentIdx / SETUP_PAGE_SIZE) : 0;
+    renderSetupList();
     el.btnStart.hidden = !pendingSetup;
     showScreen('setup');
+  }
+
+  function renderSetupList() {
+    var pages = Math.max(1, Math.ceil(setupItems.length / SETUP_PAGE_SIZE));
+    setupPage = Math.min(Math.max(setupPage, 0), pages - 1);
+    el.setupList.innerHTML = '';
+    setupItems.slice(setupPage * SETUP_PAGE_SIZE, (setupPage + 1) * SETUP_PAGE_SIZE)
+      .forEach(function (item) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        if (!item.unlocked) b.className = 'locked';
+        if (item.current) b.classList.add('current');
+        var l = document.createElement('span'); l.textContent = item.label;
+        var r = document.createElement('span'); r.className = 'stars'; r.textContent = item.right || '';
+        b.appendChild(l); b.appendChild(r);
+        b.disabled = !item.unlocked;
+        b.addEventListener('click', function () {
+          commitStart({ mode: setupListMode, cfg: item.cfg, lesson: item.lesson || null });
+        });
+        el.setupList.appendChild(b);
+      });
+    el.setupPager.hidden = pages <= 1;
+    el.setupPage.textContent = (setupPage + 1) + ' / ' + pages;
+    el.setupPrev.disabled = setupPage === 0;
+    el.setupNext.disabled = setupPage === pages - 1;
   }
 
   function commitStart(setup) {

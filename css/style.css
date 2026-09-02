@@ -147,6 +147,9 @@ html.left-handed .tray { flex-direction: row-reverse; }
 .list button.locked { opacity: .45; }
 .list button.current { border-color: var(--accent); }
 
+.pager { justify-content: center; }
+.pager span { min-width: 4em; text-align: center; }
+
 .score-table { border-collapse: collapse; min-width: min(88vw, 320px); }
 .score-table caption { text-align: left; color: var(--ink-dim); padding-bottom: .3em; }
 .score-table td, .score-table th { padding: .25em .8em; text-align: left; font-weight: 400; }
