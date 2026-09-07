@@ -183,7 +183,7 @@ window.BSUI = (function (root) {
     });
     $('btn-results-modes').addEventListener('click', function () { showScreen('mode-select'); refreshModeCards(); });
     $('btn-replay-tutorial').addEventListener('click', function () {
-      S.settings.tutorialDone = false; S.saveSettings();
+      S.progress.tutorialDone = false; S.saveProgress();
       openSetup('learn');
     });
   }
@@ -487,14 +487,25 @@ window.BSUI = (function (root) {
     S.drop();
     A.event('ack');
   }
+  var hintFlashUntil = 0;
   function doHint() {
     var h = S.hint();
     if (h) {
       A.event('hint');
-      R.setHintVisible(true);
-      setTimeout(function () { R.setHintVisible(false); }, 1600);
+      hintFlashUntil = performance.now() + 1600;
+      updateAssist();
       announce('Perfect window marked on the playfield.');
     }
+  }
+
+  // Perfect-window band visibility: the timing-assist setting shows it
+  // continuously where the ruleset allows hints; a manual hint flashes it.
+  function updateAssist() {
+    var round = S.round;
+    var show = !!(round && round.phase === 'active' && !round.state.terminal &&
+      round.cfg.mechanics.hint &&
+      (S.settings.timingAssist || performance.now() < hintFlashUntil));
+    R.setHintVisible(show);
   }
 
   function pauseGame() {
@@ -542,6 +553,7 @@ window.BSUI = (function (root) {
           break;
         case 'Escape':
           if (round && round.phase === 'active') pauseGame();
+          else if (round && round.phase === 'paused' && currentScreen === 'paused') resumeGame();
           else if (currentScreen === 'settings' || currentScreen === 'help' || currentScreen === 'board') back();
           break;
         case 'u': case 'U':
@@ -675,6 +687,7 @@ window.BSUI = (function (root) {
     openBoard: openBoard,
     applySettingsToDom: applySettingsToDom,
     openHelp: openHelp,
+    updateAssist: updateAssist,
     get currentScreen() { return currentScreen; }
   };
   return api;

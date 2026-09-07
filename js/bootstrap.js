@@ -90,6 +90,7 @@
           ? BSSession.tickNow() - round.state.tick : 0;
         alpha = Math.min(tickFloat, 4);
         if (render) render.syncState(round.state, alpha);
+        BSUI.updateAssist();
         if (round.phase === 'active' && round.state.cfg.timeLimitSec) {
           BSUI.updateHud(round.state);
         }

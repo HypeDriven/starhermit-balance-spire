@@ -206,7 +206,10 @@ export function syncState(state, alpha, decorTheme) {
       mesh.scale.set(s.w / MU, 1, s.d / MU);
       mesh.position.set(s.x / MU, i * SLAB_H + SLAB_H / 2, s.z / MU);
       const perfect = s.perfect && i > 0;
-      mesh.material.emissiveIntensity = perfect ? 0.45 : 0.12;
+      // Don't stomp an in-flight placement flash; syncState runs every frame.
+      if (!effectsPool.some(function (fx) { return fx.mesh === mesh; })) {
+        mesh.material.emissiveIntensity = perfect ? 0.45 : 0.12;
+      }
     } else {
       mesh.visible = false;
     }

@@ -25,7 +25,7 @@ const Rules = require('./js/rules.js');
 const Content = require('./js/content.js');
 
 const ROOT = __dirname;
-const DATA_DIR = path.join(ROOT, 'data');
+const DATA_DIR = process.env.BS_DATA_DIR || path.join(ROOT, 'data');
 const PORT = Number(process.argv[2] || process.env.PORT || 8080);
 const MAX_BODY = 64 * 1024;
 
@@ -92,7 +92,10 @@ function validateSubmission(body) {
 
   let cfg = null;
   if (cfgId === Content.SCORE_CHASE.id) {
-    cfg = Object.assign({}, Content.SCORE_CHASE, { seed: seed >>> 0 });
+    // The published score-chase ruleset has one immutable seed; a claim
+    // replayed on a self-chosen seed is not the same competition.
+    if ((seed >>> 0) !== Content.SCORE_CHASE.seed) return { error: 'seed-mismatch' };
+    cfg = Content.SCORE_CHASE;
   } else if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
     cfg = Content.dailyConfig(date);
     if (cfg.seed !== (seed >>> 0) || cfg.id !== cfgId) return { error: 'seed-mismatch' };

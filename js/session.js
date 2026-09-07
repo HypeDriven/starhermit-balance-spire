@@ -134,9 +134,7 @@
     checkAchievements(res.events, res.state);
     emit('state', res.state, res.events);
     if (res.state.terminal) endRound();
-    else if (res.state.cfg.timeLimitSec == null || true) {
-      // time limit enforced by tick watchdog below
-    }
+    // A live time limit is enforced by the tick watchdog in update().
     return res;
   }
 
@@ -154,7 +152,10 @@
       return false;
     }
     round.state = round.undoStack.pop();
-    round.log.push({ type: 'undo-local' }); // client-side marker; stripped for ranked replay
+    // Keep the replay envelope consistent: drop the undone command and its
+    // state hash so the log alone reproduces the current state.
+    if (round.log.length && round.log[round.log.length - 1].type === 'drop') round.log.pop();
+    if (round.hashes.length > 1) round.hashes.pop();
     trackLesson([{ type: 'undo' }]);
     emit('state', round.state, [{ type: 'undo' }]);
     return true;
@@ -184,6 +185,7 @@
     applyCmd({ type: 'resign', id: round.cfg.id + '-resign' });
   }
   function restart() {
+    if (!round) return null;
     var cfg = round.cfg, mode = round.mode, lesson = round.lesson;
     return startRound(cfg, { mode: mode, lesson: lesson });
   }
@@ -196,6 +198,7 @@
   function update() {
     if (!round) return;
     if (round.phase === 'countdown') {
+      if (round.countdownStart == null) return; // startCountdown not called yet
       var left = Math.ceil(3 - (performance.now() - round.countdownStart) / 750);
       if (left !== round.countdownLeft) {
         round.countdownLeft = left;
@@ -306,7 +309,7 @@
       seed: round.cfg.seed,
       initialHash: round.hashes[0],
       tsOffset: round.startedAt,
-      commands: round.log.filter(function (c) { return c.type !== 'undo-local'; }),
+      commands: round.log,
       hashes: round.hashes,
       result: {
         won: !!round.state.terminal.won, reason: round.state.terminal.reason,
