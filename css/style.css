@@ -116,6 +116,13 @@ html.left-handed .tray { flex-direction: row-reverse; }
   overflow-y: auto;
 }
 .screen.sheet { background: rgba(10, 8, 18, 0.85); }
+/* Title key art: authored dawn skyline behind the same dark scrim; the
+ * gradient alone still paints if assets/title-backdrop.webp fails to load. */
+#screen-title {
+  background-image: linear-gradient(rgba(10, 8, 18, 0.55), rgba(10, 8, 18, 0.8)),
+    url("../assets/title-backdrop.webp");
+  background-size: cover; background-position: center bottom;
+}
 .screen h2 { margin: 0; }
 .title-card { text-align: center; display: flex; flex-direction: column; gap: .6rem; align-items: center; }
 .game-title { font-size: clamp(2.2rem, 8vw, 4rem); margin: 0; letter-spacing: .04em; color: var(--accent); text-shadow: 0 0 24px rgba(255, 217, 160, .35); }

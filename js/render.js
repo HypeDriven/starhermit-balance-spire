@@ -30,11 +30,27 @@ let rafHook = null;
 const slabGeo = new THREE.BoxGeometry(1, SLAB_H, 1);
 const edgeGeo = new THREE.EdgesGeometry(slabGeo);
 
+// Authored limestone grain (assets/slab-stone.webp) multiplies the theme's
+// stone colour. Materials start untextured and pick the map up once it
+// decodes; if the fetch fails the flat procedural stone simply stays.
+let stoneTex = null;
+const stoneMaterials = [];
+function loadStoneTexture() {
+  new THREE.TextureLoader().load('assets/slab-stone.webp', function (tex) {
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    stoneTex = tex;
+    stoneMaterials.forEach(function (m) { m.map = tex; m.needsUpdate = true; });
+  }, undefined, function () { /* no texture: procedural stone remains */ });
+}
+
 function makeStoneMaterial(color, glow, emissive) {
-  return new THREE.MeshStandardMaterial({
-    color: color, roughness: 0.55, metalness: 0.08,
+  const m = new THREE.MeshStandardMaterial({
+    color: color, roughness: 0.55, metalness: 0.08, map: stoneTex,
     emissive: emissive || glow, emissiveIntensity: emissive ? 0.55 : 0.12
   });
+  stoneMaterials.push(m);
+  return m;
 }
 
 export function init(hostEl) {
@@ -49,6 +65,7 @@ export function init(hostEl) {
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
   host.appendChild(canvas);
+  loadStoneTexture();
 
   canvas.addEventListener('webglcontextlost', function (e) {
     e.preventDefault(); ctxLost = true;

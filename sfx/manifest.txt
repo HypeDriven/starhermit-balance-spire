@@ -1,0 +1,18 @@
+# Balance Spire SFX manifest (canonical). One line per clip:
+# file | event id (js/audio.js SAMPLE_BY_EVENT) | description of the sound | usage context
+# All clips: MOSS-SoundEffect v2.0, 48 kHz mono Opus. A synthesized fallback plays if a clip has not loaded.
+ui-ack.opus | ack | Short dry wooden UI click | Every accepted input: Drop press, tray buttons, rejected-action feedback (js/ui.js doDrop, invalid handler)
+slab-place.opus | place | Heavy stone slab landing with a dusty thud | Off-centre placement that stays on the tower ('place' event, perfect=false) in js/ui.js onState
+perfect-chime.opus | perfect | Stone thud plus three rising glass chimes | Dead-centre placement ('place' event, perfect=true); streak grows
+overhang-trim.opus | trim | Stone edge shearing off, fragments falling | 'trim' event: the overhang is shed as debris right after an off-centre place
+slab-miss.opus | miss | Stone block tumbling past and clattering away | 'miss' event: zero overlap, a spare slab is spent or the round ends
+stage-win.opus | win | Five-tone bell fanfare, warm and rising | Results screen when terminal.won (goal height reached), js/ui.js onResults
+round-lose.opus | lose | Three slow descending marimba notes | Results screen on any loss: missed, move-limit, time-up, resigned
+drop-undo.opus | undo | Airy reverse whoosh, slab sliding back up | Undo accepted (U key, Undo button, gamepad X) in practice/journey/learn
+hint-ping.opus | hint | Delicate high glass ping | Hint accepted (H key, Hint button, gamepad Y): the perfect-window band flashes
+count-tick.opus | count | Dry wooden metronome tick | Countdown 3-2-1 before a round goes active (session 'countdown' event)
+count-go.opus | go | Bright clave snap | Countdown reaches Go; round phase becomes active (js/ui.js onPhase)
+achievement-chime.opus | achievement | Sparkling celesta flourish | Achievement unlocked toast (session 'achievement' event)
+ambience-skyline.opus | ambience | Soft rooftop breeze between stone buildings, distant city hum, 20 s loop | Ambience bus loop started after the first gesture unlock; replaces the synthesized noise pad (js/audio.js startAmbienceSample)
+lesson-complete.opus | lesson | Warm three-note xylophone resolve with glass chime | Learn mode: lesson goal reached (session 'lesson-done' event in js/ui.js)
+pause-hush.opus | pause | Muffled wooden tap and a brief hush | Pause opened via P, Esc, Pause button, gamepad Start, or backgrounding (js/ui.js pauseGame)

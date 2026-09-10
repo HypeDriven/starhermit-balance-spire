@@ -1,6 +1,6 @@
 # SFX manifest — balance-spire
 
-Generated with MOSS-SoundEffect v2.0, 48 kHz mono Opus (96 kbps VBR, loudness-normalized; 100 inference steps).
+Generated with MOSS-SoundEffect v2.0, 48 kHz mono Opus (96 kbps VBR, loudness-normalized; 100 inference steps for the original twelve clips, 60 for ambience-skyline, lesson-complete and pause-hush).
 
 | file | event | prompt |
 |---|---|---|
@@ -16,3 +16,6 @@ Generated with MOSS-SoundEffect v2.0, 48 kHz mono Opus (96 kbps VBR, loudness-no
 | count-tick.opus | count | Short dry metronome tick, single wooden block knock, crisp and neutral countdown beat. |
 | count-go.opus | go | Bright wooden clave strike with an energetic rising snap, punchy start signal. |
 | achievement-chime.opus | achievement | Sparkling three-note celesta flourish, cheerful badge-unlock chime with light magical glitter. |
+| ambience-skyline.opus | ambience | Quiet night-time city rooftop ambience heard from high above: a soft continuous breeze moving between stone buildings, very distant muffled city hum, no traffic, no voices, calm and steady, smooth and loopable. |
+| lesson-complete.opus | lesson | Warm resolving three-note wooden xylophone phrase ending on a gentle glass chime, soft and encouraging, short and clean with a light shimmer tail. |
+| pause-hush.opus | pause | Soft low muffled wooden tap followed by a brief gentle airy hush, like a small padded lid closing quietly, subtle and short. |

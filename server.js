@@ -253,13 +253,15 @@ const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8', '.json': 'application/json',
   '.txt': 'text/plain; charset=utf-8', '.svg': 'image/svg+xml',
-  '.png': 'image/png', '.woff2': 'font/woff2', '.opus': 'audio/ogg'
+  '.png': 'image/png', '.webp': 'image/webp', '.woff2': 'font/woff2', '.opus': 'audio/ogg'
 };
 function serveStatic(req, res, pathname) {
   if (pathname === '/') pathname = '/index.html';
   const rel = path.normalize(pathname).replace(/^([/\\])+/, '');
   const file = path.join(ROOT, rel);
-  if (!file.startsWith(ROOT) || rel.startsWith('data' + path.sep) || rel.indexOf('..') >= 0) {
+  // Never serve the data store, dev-only folders, or dotfiles.
+  if (!file.startsWith(ROOT) || rel.startsWith('data' + path.sep) || rel.indexOf('..') >= 0 ||
+      /^(tests|tools|node_modules)([/\\]|$)|^\./.test(rel)) {
     res.writeHead(403); res.end('forbidden'); return;
   }
   fs.readFile(file, function (err, buf) {

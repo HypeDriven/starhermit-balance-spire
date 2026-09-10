@@ -70,5 +70,23 @@
     "seconds": 2,
     "prompt": "Sparkling three-note celesta flourish, cheerful badge-unlock chime with light magical glitter.",
     "event": "achievement"
+  },
+  {
+    "name": "ambience-skyline",
+    "seconds": 20,
+    "prompt": "Quiet night-time city rooftop ambience heard from high above: a soft continuous breeze moving between stone buildings, very distant muffled city hum, no traffic, no voices, calm and steady, smooth and loopable.",
+    "event": "ambience"
+  },
+  {
+    "name": "lesson-complete",
+    "seconds": 2,
+    "prompt": "Warm resolving three-note wooden xylophone phrase ending on a gentle glass chime, soft and encouraging, short and clean with a light shimmer tail.",
+    "event": "lesson"
+  },
+  {
+    "name": "pause-hush",
+    "seconds": 1,
+    "prompt": "Soft low muffled wooden tap followed by a brief gentle airy hush, like a small padded lid closing quietly, subtle and short.",
+    "event": "pause"
   }
 ]

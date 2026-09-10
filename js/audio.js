@@ -95,7 +95,8 @@
     ack: 'ui-ack', place: 'slab-place', perfect: 'perfect-chime',
     trim: 'overhang-trim', miss: 'slab-miss', win: 'stage-win',
     lose: 'round-lose', undo: 'drop-undo', hint: 'hint-ping',
-    count: 'count-tick', go: 'count-go', achievement: 'achievement-chime'
+    count: 'count-tick', go: 'count-go', achievement: 'achievement-chime',
+    lesson: 'lesson-complete', pause: 'pause-hush'
   };
   var sampleCache = {}; // name -> { state: 'loading'|'ready'|'failed', buffer }
 
@@ -193,6 +194,14 @@
         if (!sampled) chime([784, 988, 1175], 'voice', 0.18);
         caption('achievement: ' + (detail || ''));
         break;
+      case 'lesson':
+        if (!sampled) chime([523, 659, 784], 'voice', 0.16);
+        caption('lesson complete');
+        break;
+      case 'pause':
+        if (!sampled) blip('effects', 300, 0.1, 'sine', 0.12, 200);
+        caption('');
+        break;
     }
   }
 
@@ -209,6 +218,27 @@
     src.connect(f); f.connect(g); g.connect(buses.ambience);
     src.start();
     ambienceNodes = { src: src, gain: g };
+    startAmbienceSample();
+  }
+
+  // Authored skyline loop (sfx/ambience-skyline.opus) fades in over the
+  // synthesized pad once decoded; if the fetch or decode fails the pad stays.
+  function startAmbienceSample() {
+    if (!ctx || typeof fetch !== 'function') return;
+    fetch('sfx/ambience-skyline.opus').then(function (res) {
+      if (!res.ok) throw new Error('http-' + res.status);
+      return res.arrayBuffer();
+    }).then(function (bytes) {
+      return ctx.decodeAudioData(bytes);
+    }).then(function (buffer) {
+      if (!ambienceNodes || ambienceNodes.sample) return;
+      var src = ctx.createBufferSource(); src.buffer = buffer; src.loop = true;
+      var g = ctx.createGain(); g.gain.value = 0.9;
+      src.connect(g); g.connect(buses.ambience);
+      src.start();
+      ambienceNodes.gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 1.5);
+      ambienceNodes.sample = { src: src, gain: g };
+    }).catch(function () { /* keep the synthesized pad */ });
   }
 
   // ---------- adaptive music: slow two-note pad, intensity follows streak ----------

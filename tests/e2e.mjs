@@ -32,7 +32,7 @@ const browserNoise = /GL Driver Message|GPU stall due to ReadPixels|Automatic fa
 const MIME = {
   '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript',
   '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml',
-  '.png': 'image/png', '.ico': 'image/x-icon', '.wav': 'audio/wav',
+  '.png': 'image/png', '.webp': 'image/webp', '.opus': 'audio/ogg', '.ico': 'image/x-icon', '.wav': 'audio/wav',
   '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.glb': 'model/gltf-binary',
   '.woff2': 'font/woff2', '.ts': 'text/typescript', '.txt': 'text/plain',
 };

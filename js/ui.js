@@ -55,6 +55,7 @@ window.BSUI = (function (root) {
     S.on('lesson-done', function (lesson) {
       toast('Lesson complete: ' + lesson.title);
       announce('Lesson complete. ' + lesson.title);
+      A.event('lesson');
       S.progress.tutorialDone = true;
       S.saveProgress();
     });
@@ -511,6 +512,7 @@ window.BSUI = (function (root) {
   function pauseGame() {
     if (!S.round || S.round.phase !== 'active') return;
     S.pause();
+    A.event('pause');
     showScreen('paused');
   }
   function resumeGame() {
