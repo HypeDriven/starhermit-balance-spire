@@ -132,7 +132,7 @@ function boardSort(a, b) {
 // ---------- routes ----------
 const routes = {
   'GET /api/v1/time': function (req, res) {
-    send(res, 200, { now: Date.now() });
+    send(res, 200, { now: Date.now(), serverTime: Date.now() });
   },
 
   'POST /api/v1/daily/submit': async function (req, res, body) {

@@ -115,6 +115,14 @@ html.left-handed .tray { flex-direction: row-reverse; }
   background: rgba(10, 8, 18, 0.72);
   overflow-y: auto;
 }
+/* Overflowing screens keep their top reachable (safe centering) and never squash children. */
+.screen { justify-content: safe center; }
+.screen > * { flex-shrink: 0; }
+@media (orientation: landscape) and (max-height: 500px) {
+  .screen { gap: 0.6rem; padding-top: calc(0.5rem + var(--sat)); padding-bottom: calc(0.5rem + var(--sab)); }
+  .screen h1 { font-size: 1.5rem; margin: 0; }
+  .screen h2 { margin: 0; }
+}
 .screen.sheet { background: rgba(10, 8, 18, 0.85); }
 /* Title key art: authored dawn skyline behind the same dark scrim; the
  * gradient alone still paints if assets/title-backdrop.webp fails to load. */

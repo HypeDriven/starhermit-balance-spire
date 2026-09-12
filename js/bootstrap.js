@@ -95,7 +95,8 @@
       if (round && round.state) {
         var tickFloat = round.phase === 'active'
           ? BSSession.tickNow() - round.state.tick : 0;
-        alpha = Math.min(tickFloat, 4);
+        // Uncapped: the slab keeps sweeping until the next command lands.
+        alpha = Math.max(0, tickFloat);
         if (render) render.syncState(round.state, alpha);
         BSUI.updateAssist();
         if (round.phase === 'active' && round.state.cfg.timeLimitSec) {

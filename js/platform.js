@@ -121,9 +121,11 @@
   function syncTime() {
     var t0 = Date.now();
     return req('/api/v1/time').then(function (r) {
-      if (r && r.now) {
+      // Platform contract is { serverTime }; the local dev server answers { now }.
+      var serverNow = r && (Number(r.serverTime) || Number(r.now));
+      if (serverNow) {
         var rtt = Date.now() - t0;
-        timeOffsetMs = r.now - (t0 + rtt / 2);
+        timeOffsetMs = serverNow - (t0 + rtt / 2);
         hosted = true;
       } else {
         hosted = false;

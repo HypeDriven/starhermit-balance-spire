@@ -119,6 +119,7 @@ window.BSUI = (function (root) {
   }
 
   // ---------- buttons ----------
+  var lastBoard = null;
   function bindButtons() {
     $('btn-play').addEventListener('click', function () { A.unlock(); showScreen('mode-select'); refreshModeCards(); });
     $('btn-daily').addEventListener('click', function () { A.unlock(); openSetup('daily'); });
@@ -127,7 +128,9 @@ window.BSUI = (function (root) {
     $('btn-help').addEventListener('click', function () { openHelp(); });
     $('btn-boards').addEventListener('click', function () {
       var today = Content.utcDateString(P.hosted ? P.now() : Date.now());
-      openBoard('Score chase — global', P.scoreBoard(), function (r) { return r.score; });
+      lastBoard = { title: 'Score chase — global', fetch: function () { return P.scoreBoard(); },
+                    scoreOf: function (r) { return r.score; } };
+      openBoard(lastBoard.title, lastBoard.fetch(), lastBoard.scoreOf);
       // daily board appended after global rows load
       P.dailyBoard(today).then(function (r) {
         if (!r || r.error || !r.rows) return;
@@ -639,7 +642,17 @@ window.BSUI = (function (root) {
     showScreen('board');
     promise.then(function (r) {
       if (!r || r.error || !r.rows) {
-        el.boardBody.textContent = 'Board unavailable (' + (r && r.error || 'offline') + ').';
+        var reason = r && r.error || 'offline';
+        var msg = reason === 'offline' ? 'You appear to be offline.'
+          : reason === 'rate-limited' ? 'Too many requests — wait a moment.'
+          : 'The board service did not answer as expected (' + reason + ').';
+        el.boardBody.textContent = 'Board unavailable. ' + msg + ' ';
+        var retry = document.createElement('button');
+        retry.type = 'button'; retry.className = 'btn'; retry.textContent = 'Retry';
+        retry.addEventListener('click', function () {
+          if (lastBoard) openBoard(lastBoard.title, lastBoard.fetch(), lastBoard.scoreOf);
+        });
+        el.boardBody.appendChild(retry);
         return;
       }
       if (!r.rows.length) { el.boardBody.textContent = 'No scores yet — be the first.'; return; }
