@@ -233,9 +233,9 @@ Used (`js/platform.js` → `server.js`):
 | Activity / presence | `POST /api/v1/activity/start|end`, `POST /api/v1/presence/heartbeat` (30 s) | Playtime pairing per player; heartbeat is liveness only. |
 | Funnel | `POST /api/v1/funnel` via `sendBeacon` | Only when the analytics consent box is ticked; six event names counted per day. |
 
-Identity: the launch token (`?launch_token=` or `?token=`) is held in memory and sent as a Bearer header; a persistent anonymous `bs.playerId` travels in `X-Player-Id`. Offline (no host) every mode still plays; ranked results are kept locally and the results screen says so. Submissions carry cfgId, date, seed, content version, the ordered command log, the result and assists; the server rejects stale versions, seed mismatches, duplicate command ids, malformed or non-terminal logs, and score/hash mismatches (`tests/server.test.js`).
+Identity: the launch token arrives in the URL fragment (`#game_token=<jwt>`, optional `&session_id=`), is stripped after the read, and is held in memory and sent as a Bearer header; it is re-minted every 45 min via `POST /api/v1/games/{slug}/launch-token` (60 s retry on failure). The JWT's `sub` (account id) becomes the `X-Player-Id` identity when present, so board rows attach to the account; otherwise a persistent anonymous `bs.playerId` travels in `X-Player-Id`. The slug comes from the JWT's `game_scope` (query `?game=` is a local-dev fallback). Board rows display the profile nickname via `GET /api/v1/users/{id}/profile` (cached; `Player <id8>` fallback off-platform). Offline (no host) every mode still plays; ranked results are kept locally and the results screen says so. Submissions carry cfgId, date, seed, content version, the ordered command log, the result and assists; the server rejects stale versions, seed mismatches, duplicate command ids, malformed or non-terminal logs, and score/hash mismatches (`tests/server.test.js`).
 
-Not used: profile names/avatars, cloud saves, per-game settings sync, WebSocket, realtime rooms, matchmaking, invitations, chat, voice, containers. Conventions follow https://wiki.starhermit.com/.
+Not used: avatars, cloud saves (progress is server-side for ranked results, localStorage otherwise), per-game settings sync, WebSocket, realtime rooms, matchmaking, invitations, chat, voice, containers. Conventions follow https://wiki.starhermit.com/.
 
 ## 13. Technical architecture
 
@@ -276,7 +276,7 @@ QA bar as checkable statements: the first stage's intro is toasted and announced
 
 - No localization layer: English strings are literals in HTML/JS (§10).
 - Theme `unlockStars` values in `Content.THEMES` are data only; themes are assigned per stage and never gated by stars (`progress.themeUnlocksSeen` is unused).
-- Leaderboards list anonymous player ids, not display names; the `friends=` filter exists server-side but the UI never sends it, and the launch token is forwarded but not verified by the script, so identity on boards is self-asserted (scores themselves are still replay-validated).
+- Leaderboard rows resolve display names through the profile endpoint (own row marked "You"); the `friends=` filter exists server-side but the UI never sends it, and the game script trusts the `X-Player-Id` header, so identity on boards is only as strong as the host in front of the script — with a launch token the client sends the account id, without one it is self-asserted (scores themselves are always replay-validated).
 - Auto quality steps down from the auto-detected tier rather than the currently active one, so it can only degrade once per session.
 - A restored snapshot loses its lesson context (`lesson: null`), so a Learn round resumed after a crash no longer tracks its goal.
 - Gamepad bindings are fixed (no remapping UI); the setup screen has no gamepad focus navigation beyond browser defaults.
@@ -288,5 +288,5 @@ QA bar as checkable statements: the first stage's intro is toasted and announced
 
 - Ship the nine locale tables (en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR, it-IT) with a `data-i18n` pass over `index.html` and a string table for `ui.js`/`content.js`, chosen from the host locale with a settings override.
 - Gate themes by `unlockStars` and surface unlocks on the results screen.
-- Show profile display names and a friends-only toggle on boards using the host identity.
+- Friends-only toggle on boards (the server-side `friends=` filter exists; the client never sends it).
 - Resume Learn lessons from snapshots.

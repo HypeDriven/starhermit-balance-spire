@@ -135,10 +135,7 @@ window.BSUI = (function (root) {
         h.textContent = 'Daily ' + today;
         var ol = document.createElement('ol');
         r.rows.slice(0, 20).forEach(function (row) {
-          var li = document.createElement('li');
-          li.textContent = row.playerId + ' ';
-          var b = document.createElement('strong'); b.textContent = row.score;
-          li.appendChild(b); ol.appendChild(li);
+          appendBoardRow(ol, row, String(row.score));
         });
         el.boardBody.appendChild(h); el.boardBody.appendChild(ol);
       });
@@ -618,6 +615,24 @@ window.BSUI = (function (root) {
   }
 
   // ---------- boards ----------
+  // Display name for a board row: an explicit server-provided name wins;
+  // otherwise resolve the player id to the profile nickname (cached in the
+  // platform adapter), marking the signed-in player's own row.
+  function boardRowLabel(row) {
+    if (row.name) return Promise.resolve(row.name);
+    var pid = row.playerId;
+    if (!pid) return Promise.resolve('player');
+    return P.profileFor(pid).then(function (name) {
+      return pid === P.playerId ? 'You (' + name + ')' : name;
+    });
+  }
+  function appendBoardRow(ol, row, scoreText) {
+    var li = document.createElement('li');
+    li.textContent = (row.name || row.playerId || 'player') + ' ';
+    boardRowLabel(row).then(function (label) { li.textContent = label + ' '; });
+    var b = document.createElement('strong'); b.textContent = scoreText;
+    li.appendChild(b); ol.appendChild(li);
+  }
   function openBoard(title, promise, scoreOf) {
     el.boardH.textContent = title;
     el.boardBody.textContent = 'Loading…';
@@ -630,11 +645,7 @@ window.BSUI = (function (root) {
       if (!r.rows.length) { el.boardBody.textContent = 'No scores yet — be the first.'; return; }
       var ol = document.createElement('ol');
       r.rows.forEach(function (row) {
-        var li = document.createElement('li');
-        li.textContent = row.name || row.playerId || 'player';
-        var b = document.createElement('strong'); b.textContent = ' ' + scoreOf(row);
-        li.appendChild(b);
-        ol.appendChild(li);
+        appendBoardRow(ol, row, ' ' + scoreOf(row));
       });
       el.boardBody.textContent = '';
       el.boardBody.appendChild(ol);

@@ -62,9 +62,16 @@
     if (render) BSUI.applySettingsToDom();
 
     BSPlatform.syncTime().then(function (hosted) {
-      document.getElementById('title-net').textContent = hosted
-        ? 'Connected — daily and boards are live.'
-        : 'Offline mode — daily and boards will sync when hosted.';
+      var net = document.getElementById('title-net');
+      if (!hosted) {
+        net.textContent = 'Offline mode — daily and boards will sync when hosted.';
+        return;
+      }
+      net.textContent = 'Connected — daily and boards are live.';
+      // With a launch token the signed-in player's nickname is shown here.
+      BSPlatform.displayName().then(function (name) {
+        if (name) net.textContent = 'Connected as ' + name + ' — daily and boards are live.';
+      });
     });
 
     // Resume an interrupted round (last safe local snapshot).
