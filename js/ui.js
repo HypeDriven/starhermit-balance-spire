@@ -43,6 +43,7 @@ window.BSUI = (function (root) {
     bindButtons();
     bindInput();
     bindSettings();
+    if (root.BSGraphicsPanel) root.BSGraphicsPanel.init(S, R);
     applySettingsToDom();
     refreshTitleMeta();
     showScreen('title');
@@ -696,7 +697,7 @@ window.BSUI = (function (root) {
     A.setCaptions(st.captions);
     R.setReducedMotion(st.reducedMotion);
     R.setHintVisible(false);
-    if (st.quality !== 'auto') R.setQuality(st.quality);
+    if (R.setGraphics) R.setGraphics(st.graphics || {});
   }
 
   var api = {

@@ -26,7 +26,7 @@
 
   var DEFAULT_SETTINGS = {
     volMusic: 40, volEffects: 80, volAmbience: 35, volVoice: 60,
-    captions: true, quality: 'auto', reducedMotion: false, highContrast: false,
+    captions: true, graphics: {}, reducedMotion: false, highContrast: false,
     largeText: false, leftHanded: false, holdToDrop: false,
     timingAssist: true, haptics: true, analytics: false, tutorialDone: false
   };
@@ -64,7 +64,15 @@
     (listeners[evt] || []).forEach(function (cb) { cb(a, b); });
   }
 
-  var settings = Object.assign({}, DEFAULT_SETTINGS, load(SETTINGS_KEY, function () { return {}; }));
+  var loadedSettings = load(SETTINGS_KEY, function () { return {}; });
+  var settings = Object.assign({}, DEFAULT_SETTINGS, loadedSettings);
+  // Graphics settings ({ preset, render_scale, adaptive, show_fps, <category> }).
+  // Older saves had a single quality tier; carry it over as a preset once.
+  if (!loadedSettings.graphics || typeof loadedSettings.graphics !== 'object') {
+    var legacy = { high: 'high', medium: 'balanced', low: 'low' }[loadedSettings.quality];
+    settings.graphics = legacy ? { preset: legacy } : {};
+  }
+  delete settings.quality;
   var progress = load(PROGRESS_KEY, defaultProgress);
   if (!progress.achievements) progress = defaultProgress();
 

@@ -182,6 +182,31 @@ html.left-handed .tray { flex-direction: row-reverse; }
 .settings-grid legend { color: var(--ink-dim); padding: 0 .4em; }
 .settings-grid label { display: flex; justify-content: space-between; align-items: center; gap: .8em; min-height: 32px; }
 .settings-grid input[type="range"] { width: 120px; }
+/* Graphics section: full-width, category overrides in a responsive sub-grid. */
+.settings-grid .gfx-fieldset { grid-column: 1 / -1; }
+.settings-grid select {
+  font: inherit; color: var(--ink); background: #1f1a2e; border: 1px solid var(--line);
+  border-radius: 8px; min-height: 36px; padding: .2em .5em; max-width: 100%;
+}
+.gfx-cats { display: grid; gap: .55em 1.4em; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); }
+/* Label and control share a row; long (localized) option text wraps the control below. */
+.settings-grid label.gfx-row { flex-wrap: wrap; gap: .3em .8em; }
+.gfx-row > span:first-child { flex: 1 1 7em; }
+.gfx-row > select { flex: 0 1 auto; margin-left: auto; }
+.gfx-scale { display: inline-flex; align-items: center; gap: .5em; }
+.gfx-scale output { min-width: 3.2em; text-align: right; font-variant-numeric: tabular-nums; }
+.settings-grid label.gfx-check { justify-content: flex-start; }
+.gfx-summary { margin: .2em 0 0; font-size: .85rem; overflow-wrap: anywhere; }
+.gfx-note { margin: 0; font-size: .85rem; color: var(--accent); }
+@media (max-width: 420px) {
+  .settings-grid select { font-size: .9rem; }
+  .settings-grid input[type="range"] { width: 96px; }
+}
+.fps-meter {
+  position: fixed; right: calc(8px + var(--sar)); bottom: calc(8px + var(--sab)); z-index: 55;
+  background: rgba(0, 0, 0, .6); color: var(--ink); font: 12px ui-monospace, monospace;
+  padding: .2em .5em; border-radius: 6px; pointer-events: none;
+}
 
 .caption {
   position: absolute; bottom: calc(76px + var(--sab)); left: 50%; transform: translateX(-50%);

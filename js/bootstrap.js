@@ -28,16 +28,6 @@
     } catch (e) { return false; }
   }
 
-  function autoQuality() {
-    // Mechanism-backed default: coarse pointer or low memory → medium/low.
-    var coarse = matchMedia('(pointer: coarse)').matches;
-    var mem = navigator.deviceMemory || 4;
-    var tier = 'high';
-    if (coarse || mem <= 4) tier = 'medium';
-    if (mem <= 2) tier = 'low';
-    return tier;
-  }
-
   function start(renderReady) {
     BSPlatform.init();
 
@@ -51,8 +41,8 @@
       document.getElementById('live-assertive').textContent =
         '3D graphics are unavailable in this browser.';
     } else {
-      var tier = BSSession.settings.quality === 'auto' ? autoQuality() : BSSession.settings.quality;
-      render.setQuality(tier);
+      // Graphics preset/overrides (js/gfx.js); Auto picks a preset from the GPU.
+      render.setGraphics(BSSession.settings.graphics || {});
     }
 
     BSUI.init({
@@ -85,7 +75,6 @@
 
     // ---------- main loop: fixed simulation pump + render ----------
     var lastT = performance.now(), alpha = 0;
-    var fpsAccum = 0, fpsN = 0, lowFpsSince = 0;
     function loop(now) {
       requestAnimationFrame(loop);
       var dt = Math.min(0.1, (now - lastT) / 1000);
@@ -104,22 +93,8 @@
         }
       }
       if (render) {
+        // Adaptive resolution lives in the renderer (see js/render.js adapt()).
         render.frame(document.hidden ? 0 : dt);
-        // Adaptive render scale: sustained < 45 fps drops one tier before
-        // ever touching the simulation rate.
-        if (!document.hidden && BSSession.settings.quality === 'auto') {
-          fpsAccum += dt; fpsN++;
-          if (fpsAccum >= 2) {
-            var fps = fpsN / fpsAccum;
-            fpsAccum = 0; fpsN = 0;
-            if (fps < 45 && !lowFpsSince) lowFpsSince = now;
-            if (lowFpsSince && now - lowFpsSince > 4000) {
-              var cur = render.stats ? autoQuality() : 'medium';
-              render.setQuality(cur === 'high' ? 'medium' : 'low');
-              lowFpsSince = 0;
-            }
-          }
-        }
       }
     }
     requestAnimationFrame(loop);
@@ -164,7 +139,8 @@
   // No-3D stub so UI stays fully operable (progress preserved).
   function stubRender() {
     return {
-      setTheme: function () {}, setQuality: function () {}, setReducedMotion: function () {},
+      setTheme: function () {}, setQuality: function () {}, setGraphics: function () {},
+      graphicsInfo: function () { return null; }, setReducedMotion: function () {},
       syncState: function () {}, playEvents: function () {}, setHintVisible: function () {},
       frame: function () {}, applySize: function () {}, setVisible: function () {},
       stats: function () { return null; }, dispose: function () {}

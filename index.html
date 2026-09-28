@@ -161,13 +161,13 @@
           <label>Voice cues <input type="range" name="volVoice" min="0" max="100" step="1"></label>
           <label><input type="checkbox" name="captions"> Captions for meaningful audio</label>
         </fieldset>
-        <fieldset>
+        <fieldset id="gfx-settings" class="gfx-fieldset" data-section="graphics">
           <legend>Graphics</legend>
-          <label>Quality tier
-            <select name="quality">
-              <option value="auto">Auto</option><option value="high">High</option>
-              <option value="medium">Medium</option><option value="low">Low</option>
-            </select></label>
+          <!-- Filled by js/graphics-panel.js: quality preset, render scale,
+               per-effect overrides, adaptive resolution, frame rate, summary. -->
+        </fieldset>
+        <fieldset>
+          <legend>Display</legend>
           <label><input type="checkbox" name="reducedMotion"> Reduced motion</label>
           <label><input type="checkbox" name="highContrast"> High contrast</label>
           <label><input type="checkbox" name="largeText"> Larger text</label>
@@ -205,12 +205,17 @@
   <div id="toast" class="toast" role="status" hidden></div>
 </div>
 
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js", "three/addons/": "./vendor/three/addons/" } }
+</script>
 <script src="js/rng.js"></script>
 <script src="js/rules.js"></script>
 <script src="js/content.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/platform.js"></script>
 <script src="js/session.js"></script>
+<script src="js/gfx.js"></script>
+<script src="js/graphics-panel.js"></script>
 <script src="js/ui.js"></script>
 <script type="module" src="js/render.js"></script>
 <script src="js/bootstrap.js"></script>

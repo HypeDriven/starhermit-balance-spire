@@ -21,7 +21,7 @@
  *
  * Run: npm run test:e2e
  */
-import { chromium } from 'playwright-core';
+import { chromium, firefox } from 'playwright-core';
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
@@ -63,10 +63,15 @@ const BASE = `http://127.0.0.1:${server.address().port}`;
 const SHOT = (stage, pass) => `/tmp/balance-spire-e2e-${stage}-${pass}.png`;
 const TPS = 60; // rules ticks per second
 
-const browser = await chromium.launch({
-  executablePath: '/usr/bin/google-chrome',
-  args: ['--no-sandbox', '--enable-unsafe-swiftshader', '--mute-audio'],
-});
+// E2E_BROWSER=firefox runs the same flow in Playwright's Firefox (software
+// WebGL via llvmpipe) on hosts where headless Chrome cannot create a context.
+const USE_FIREFOX = process.env.E2E_BROWSER === 'firefox';
+const browser = USE_FIREFOX
+  ? await firefox.launch({ firefoxUserPrefs: { 'webgl.force-enabled': true, 'media.volume_scale': '0.0' } })
+  : await chromium.launch({
+    executablePath: '/usr/bin/google-chrome',
+    args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--mute-audio'],
+  });
 
 let failures = 0;
 
@@ -76,7 +81,9 @@ async function runPass(passName, contextOpts) {
   const errors = [];
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
   page.on('console', (m) => {
-    if (m.type() === 'error' && !browserNoise.test(m.text())) errors.push(`console: ${m.text()}`);
+    if ((m.type() === 'error' || m.type() === 'warning') && !browserNoise.test(m.text())) {
+      errors.push(`console ${m.type()}: ${m.text()}`);
+    }
   });
 
   const step = async (name, fn) => {
@@ -133,6 +140,50 @@ async function runPass(passName, contextOpts) {
       await page.waitForSelector('#screen-title:not([hidden])', { timeout: 15000 });
       await page.waitForFunction(() => !!window.BSSession && !!window.BSRules);
       await page.screenshot({ path: SHOT('title', passName) });
+    });
+
+    await step('settings → Graphics: presets, override, persistence', async () => {
+      const tap = (sel) => (contextOpts.hasTouch ? page.tap(sel) : page.click(sel));
+      const gfxState = () => page.evaluate(() => ({
+        body: document.body.dataset.gfxPreset,
+        canvas: (document.querySelector('#gl-host canvas') || {}).dataset?.gfxPreset,
+        summary: document.getElementById('gfx-summary').textContent,
+        bloom: document.getElementById('gfx-bloom').value,
+        preset: document.getElementById('gfx-preset').value,
+      }));
+      await tap('#btn-settings');
+      await page.waitForSelector('#screen-settings:not([hidden])');
+      const autoLabel = await page.locator('#gfx-preset option[value="auto"]').textContent();
+      if (!/Auto \(detected: (Low|Balanced|High)\)/.test(autoLabel)) throw new Error('auto label: ' + autoLabel);
+      await page.selectOption('#gfx-preset', 'low');
+      let g = await gfxState();
+      if (g.body !== 'low' || g.canvas !== 'low') throw new Error('Low not applied: ' + JSON.stringify(g));
+      if (!/no shadows/.test(g.summary)) throw new Error('Low summary: ' + g.summary);
+      await page.selectOption('#gfx-preset', 'ultra');
+      await page.waitForTimeout(600); // render a few Ultra frames (console must stay clean)
+      await page.selectOption('#gfx-preset', 'high');
+      g = await gfxState();
+      if (g.body !== 'high' || !/bloom/.test(g.summary)) throw new Error('High not applied: ' + JSON.stringify(g));
+      await page.selectOption('#gfx-bloom', 'off');
+      g = await gfxState();
+      if (/· bloom/.test(g.summary)) throw new Error('bloom override not applied: ' + g.summary);
+      // The Graphics section fits the viewport width (panel scrolls vertically).
+      const vw = page.viewportSize().width;
+      const box = await page.locator('#gfx-settings').boundingBox();
+      if (!box || box.x < 0 || box.x + box.width > vw + 1) throw new Error('graphics panel overflows: ' + JSON.stringify(box));
+      await page.screenshot({ path: SHOT('graphics', passName) });
+      await page.reload({ waitUntil: 'load' });
+      await page.waitForSelector('#screen-title:not([hidden])', { timeout: 15000 });
+      await tap('#btn-settings');
+      await page.waitForSelector('#screen-settings:not([hidden])');
+      g = await gfxState();
+      if (g.preset !== 'high' || g.bloom !== 'off' || g.body !== 'high') throw new Error('graphics not persisted: ' + JSON.stringify(g));
+      // Choosing a preset clears overrides; back to Auto keeps the rest of the run cheap.
+      await page.selectOption('#gfx-preset', 'auto');
+      g = await gfxState();
+      if (g.bloom !== 'preset' || g.preset !== 'auto') throw new Error('preset did not clear overrides: ' + JSON.stringify(g));
+      await page.locator('#screen-settings [data-back]').click();
+      await page.waitForSelector('#screen-title:not([hidden])');
     });
 
     await step('help opens and closes', async () => {
@@ -299,7 +350,9 @@ async function runPass(passName, contextOpts) {
 
 try {
   await runPass('desktop', { viewport: { width: 1280, height: 800 } });
-  await runPass('mobile', { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  await runPass('mobile', USE_FIREFOX
+    ? { viewport: { width: 390, height: 844 }, hasTouch: true }
+    : { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
   console.log('\nE2E PASS — both viewport passes clean');
 } catch (e) {
   failures++;
