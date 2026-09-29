@@ -294,3 +294,7 @@ QA bar as checkable statements: the first stage's intro is toasted and announced
 - Gate themes by `unlockStars` and surface unlocks on the results screen.
 - Friends-only toggle on boards (the server-side `friends=` filter exists; the client never sends it).
 - Resume Learn lessons from snapshots.
+
+## Browser interference
+
+`browser-guard.js` (loaded from `index.html`) suppresses browser UI that gets in the way of play: the right-click context menu, the iOS long-press callout, copy / cut / paste, and page text selection. Text fields (inputs, textareas, selects, contenteditable) keep normal selection, context menu and clipboard behaviour.
