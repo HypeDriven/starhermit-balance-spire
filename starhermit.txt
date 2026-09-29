@@ -1,4 +1,5 @@
 name=Balance Spire
+description=Time each sliding slab to build a taller tower, keeping your landings precise as the platform narrows.
 launch=index.html
 owner=2712e04e-461b-4d23-81ae-e40b429128a8
 server=server.js
