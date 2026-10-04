@@ -42,10 +42,13 @@ window.BSUI = (function (root) {
 
     bindButtons();
     bindInput();
+    $('btn-sign-in').addEventListener('click', function () { P.signIn(); });
+    $('btn-invite').addEventListener('click', copyInvite);
     bindSettings();
     if (root.BSGraphicsPanel) root.BSGraphicsPanel.init(S, R);
     applySettingsToDom();
     refreshTitleMeta();
+    refreshAccount();
     showScreen('title');
 
     S.on('phase', onPhase);
@@ -63,7 +66,6 @@ window.BSUI = (function (root) {
     S.on('achievement', function (key) {
       var def = Content.ACHIEVEMENTS.find(function (a) { return a.key === key; });
       if (def) { toast('Achievement: ' + def.name); A.event('achievement', def.name); }
-      P.unlockAchievement(key);
     });
     A.onCaption(showCaption);
   }
@@ -120,7 +122,6 @@ window.BSUI = (function (root) {
   }
 
   // ---------- buttons ----------
-  var lastBoard = null;
   function bindButtons() {
     $('btn-play').addEventListener('click', function () { A.unlock(); showScreen('mode-select'); refreshModeCards(); });
     $('btn-daily').addEventListener('click', function () { A.unlock(); openSetup('daily'); });
@@ -129,12 +130,10 @@ window.BSUI = (function (root) {
     $('btn-help').addEventListener('click', function () { openHelp(); });
     $('btn-boards').addEventListener('click', function () {
       var today = Content.utcDateString(P.hosted ? P.now() : Date.now());
-      lastBoard = { title: 'Score chase — global', fetch: function () { return P.scoreBoard(); },
-                    scoreOf: function (r) { return r.score; } };
-      openBoard(lastBoard.title, lastBoard.fetch(), lastBoard.scoreOf);
+      openBoard('Score chase — this device', P.scoreBoard(), function (r) { return r.score; });
       // daily board appended after global rows load
       P.dailyBoard(today).then(function (r) {
-        if (!r || r.error || !r.rows) return;
+        if (!r.rows.length) return;
         var h = document.createElement('h3');
         h.textContent = 'Daily ' + today;
         var ol = document.createElement('ol');
@@ -300,7 +299,6 @@ window.BSUI = (function (root) {
     S.startCountdown();
     showScreen(null);
     showHud(round);
-    P.activityStart();
     if (setup.mode === 'learn' || setup.cfg.intro) announceAssertive(setup.lesson ? setup.lesson.text : setup.cfg.intro);
     if (setup.lesson) toast(setup.lesson.title + ' — ' + setup.lesson.text);
     else if (setup.cfg.intro) toast(setup.cfg.intro);
@@ -435,24 +433,14 @@ window.BSUI = (function (root) {
     A.event(res.won ? 'win' : 'lose');
     announceAssertive(el.resultsHeadline.textContent + ' Total score ' + s.score.total);
     showScreen('results');
-    P.activityEnd();
-
-    if (S.isRanked() && P.hosted) {
-      el.resultsBoard.textContent = 'Submitting for validation…';
+    if (S.isRanked()) {
       var submit = S.round.mode === 'daily'
         ? P.submitDaily(s.cfg.date, envelopePayload(res.replay))
         : P.submitScore(envelopePayload(res.replay));
       submit.then(function (r) {
-        if (r && r.rank != null) {
-          el.resultsBoard.textContent = 'Validated. Rank #' + r.rank + ' of ' + r.total + '.';
-        } else if (r && r.error) {
-          el.resultsBoard.textContent = 'Board unavailable (' + r.error + '). Score kept locally.';
-        } else {
-          el.resultsBoard.textContent = 'Submitted.';
-        }
+        el.resultsBoard.textContent = r.rank != null
+          ? 'Local board: rank #' + r.rank + ' of ' + r.total + '.' : '';
       });
-    } else if (S.isRanked()) {
-      el.resultsBoard.textContent = 'Offline — score kept locally; connect to a host to submit.';
     } else {
       el.resultsBoard.textContent = '';
     }
@@ -545,27 +533,26 @@ window.BSUI = (function (root) {
       var tag = (e.target.tagName || '').toLowerCase();
       if (tag === 'input' || tag === 'select' || tag === 'textarea') return;
       var round = S.round;
-      switch (e.key) {
-        case ' ':
-        case 'Enter':
+      switch (actionFor(e.code)) {
+        case 'drop':
           if (round && round.phase === 'active' && !currentScreen) { e.preventDefault(); doDrop(); }
           break;
-        case 'p': case 'P':
+        case 'pause':
           if (round && round.phase === 'active') pauseGame();
           else if (round && round.phase === 'paused') resumeGame();
           break;
-        case 'Escape':
+        case 'back':
           if (round && round.phase === 'active') pauseGame();
           else if (round && round.phase === 'paused' && currentScreen === 'paused') resumeGame();
           else if (currentScreen === 'settings' || currentScreen === 'help' || currentScreen === 'board') back();
           break;
-        case 'u': case 'U':
+        case 'undo':
           if (round && round.phase === 'active') { if (S.undo()) A.event('undo'); }
           break;
-        case 'h': case 'H':
+        case 'hint':
           if (round && round.phase === 'active') doHint();
           break;
-        case 'c': case 'C':
+        case 'camera':
           // camera reset: snap framing to tower top
           if (round) { R.syncState(round.state, 0); announce('Camera refocused on the tower.'); }
           break;
@@ -605,7 +592,8 @@ window.BSUI = (function (root) {
       ['Perfect', 'Drop dead center (within the glowing margin) to keep full width, earn bonus points, and grow a streak.'],
       ['Hints & undo', 'Where allowed, press H to mark the perfect window and U to take back a drop. Ranked modes disable both.'],
       ['Limits', 'Some stages limit drops or time. Misses spend drops too. The clock only runs while you play.'],
-      ['Keyboard', 'Space/Enter drop · P pause · U undo · H hint · C camera · Esc back. Full game is keyboard-operable.']
+      ['Keyboard', keysOf('drop') + ' drop · ' + keysOf('pause') + ' pause · ' + keysOf('undo') + ' undo · ' +
+        keysOf('hint') + ' hint · ' + keysOf('camera') + ' camera · ' + keysOf('back') + ' back. Full game is keyboard-operable.']
     ];
     cards.forEach(function (c) {
       var div = document.createElement('div');
@@ -642,20 +630,6 @@ window.BSUI = (function (root) {
     el.boardBody.textContent = 'Loading…';
     showScreen('board');
     promise.then(function (r) {
-      if (!r || r.error || !r.rows) {
-        var reason = r && r.error || 'offline';
-        var msg = reason === 'offline' ? 'You appear to be offline.'
-          : reason === 'rate-limited' ? 'Too many requests — wait a moment.'
-          : 'The board service did not answer as expected (' + reason + ').';
-        el.boardBody.textContent = 'Board unavailable. ' + msg + ' ';
-        var retry = document.createElement('button');
-        retry.type = 'button'; retry.className = 'btn'; retry.textContent = 'Retry';
-        retry.addEventListener('click', function () {
-          if (lastBoard) openBoard(lastBoard.title, lastBoard.fetch(), lastBoard.scoreOf);
-        });
-        el.boardBody.appendChild(retry);
-        return;
-      }
       if (!r.rows.length) { el.boardBody.textContent = 'No scores yet — be the first.'; return; }
       var ol = document.createElement('ol');
       r.rows.forEach(function (row) {
@@ -664,6 +638,61 @@ window.BSUI = (function (root) {
       el.boardBody.textContent = '';
       el.boardBody.appendChild(ol);
     });
+  }
+
+  // ---------- keyboard bindings (control.* in starhermit.txt) ----------
+  var DEFAULT_BINDINGS = {
+    drop: ['Space', 'Enter', 'NumpadEnter'], pause: ['KeyP'], back: ['Escape'],
+    undo: ['KeyU'], hint: ['KeyH'], camera: ['KeyC']
+  };
+  var bindings = JSON.parse(JSON.stringify(DEFAULT_BINDINGS));
+  function actionFor(code) {
+    for (var a in bindings) if (bindings[a].indexOf(code) >= 0) return a;
+    return null;
+  }
+  function keyName(code) {
+    var named = { Space: 'Space', Escape: 'Esc', NumpadEnter: 'Num Enter', ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓' };
+    return named[code] || String(code).replace(/^Key/, '').replace(/^Digit/, '');
+  }
+  function keysOf(action) { return (bindings[action] || []).map(keyName).join('/'); }
+  /** Apply the player's effective bindings and relabel the tray key hints. */
+  function setBindings(b) {
+    bindings = b;
+    [['btn-drop', 'drop'], ['btn-hint', 'hint'], ['btn-undo', 'undo'], ['btn-pause', 'pause']].forEach(function (x) {
+      var k = $(x[0]) && $(x[0]).querySelector('kbd');
+      if (k) k.textContent = keyName(bindings[x[1]][0]);
+    });
+  }
+
+  // ---------- StarHermit account: sign-in, invite ----------
+  function accountStrings() { return root.BSGraphicsPanel ? root.BSGraphicsPanel.accountStrings() : null; }
+  function refreshAccount() {
+    var T = accountStrings();
+    var si = $('btn-sign-in'), inv = $('btn-invite');
+    if (!T || !si || !inv) return;
+    si.textContent = T.signIn; si.hidden = !P.canSignIn();
+    inv.textContent = T.invite; inv.hidden = !P.tokenHosted;
+    $('title-account').hidden = si.hidden && inv.hidden;
+  }
+  function copyInvite() {
+    var T = accountStrings();
+    var link = P.inviteLink();
+    if (!link) return;
+    var fail = function () { toast(T.inviteFailed + ' ' + link); };
+    try { navigator.clipboard.writeText(link).then(function () { toast(T.inviteCopied); }, fail); }
+    catch (e) { fail(); }
+  }
+
+  /** Re-read every Settings control from S.settings (after a platform sync). */
+  function syncSettingsForm() {
+    var form = document.getElementById('settings-form');
+    Array.prototype.forEach.call(form.elements, function (input) {
+      if (!input.name || !(input.name in S.settings)) return;
+      var v = S.settings[input.name];
+      if (input.type === 'checkbox') input.checked = !!v;
+      else input.value = v;
+    });
+    if (root.BSGraphicsPanel) root.BSGraphicsPanel.refresh();
   }
 
   // ---------- settings ----------
@@ -713,6 +742,10 @@ window.BSUI = (function (root) {
     refreshTitleMeta: refreshTitleMeta,
     openBoard: openBoard,
     applySettingsToDom: applySettingsToDom,
+    syncSettingsForm: syncSettingsForm,
+    setBindings: setBindings,
+    refreshAccount: refreshAccount,
+    DEFAULT_BINDINGS: DEFAULT_BINDINGS,
     openHelp: openHelp,
     updateAssist: updateAssist,
     get currentScreen() { return currentScreen; }

@@ -28,7 +28,7 @@
     volMusic: 40, volEffects: 80, volAmbience: 35, volVoice: 60,
     captions: true, graphics: {}, reducedMotion: false, highContrast: false,
     largeText: false, leftHanded: false, holdToDrop: false,
-    timingAssist: true, haptics: true, analytics: false, tutorialDone: false
+    timingAssist: true, haptics: true, tutorialDone: false
   };
 
   function defaultProgress() {
@@ -77,7 +77,7 @@
   if (!progress.achievements) progress = defaultProgress();
 
   function saveSettings() { save(SETTINGS_KEY, settings); emit('settings', settings); }
-  function saveProgress() { save(PROGRESS_KEY, progress); }
+  function saveProgress() { save(PROGRESS_KEY, progress); emit('progress', progress); }
 
   // ---------- round runner ----------
   var round = null;
@@ -356,6 +356,14 @@
     saveSettings: saveSettings,
     get progress() { return progress; },
     saveProgress: saveProgress,
+    /** Adopt a progress document from the cloud save (remote wins). */
+    adoptProgress: function (p) {
+      if (!p || typeof p !== 'object' || !p.achievements) return false;
+      progress = Object.assign(defaultProgress(), p);
+      save(PROGRESS_KEY, progress);
+      return true;
+    },
+    DEFAULT_SETTINGS: DEFAULT_SETTINGS,
     get round() { return round; },
     startRound: startRound,
     startCountdown: startCountdown,

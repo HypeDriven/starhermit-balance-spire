@@ -5,8 +5,8 @@
  * static server (the repo's server.js is the StarHermit authoritative host
  * script, so this test embeds its own minimal node:http server on an
  * ephemeral port). The game is fully playable offline: journey, practice,
- * settings, help all work without the platform backend; daily/score boards
- * degrade to "offline" and are not covered here.
+ * settings, help all work without the platform backend; boards are local.
+ * A standalone load must make zero same-origin /api or /ws requests.
  *
  * Flow (desktop 1280x800, then a fresh mobile 390x844 touch context):
  *   title → help open/close → mode select → journey stage 1 → countdown →
@@ -37,15 +37,15 @@ const MIME = {
   '.woff2': 'font/woff2', '.ts': 'text/typescript', '.txt': 'text/plain',
 };
 
+const ownServerHits = [];
 const server = http.createServer(async (req, res) => {
   try {
     let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
     if (p === '/') p = '/index.html';
-    // No StarHermit backend here: answer API probes with empty JSON (200)
-    // so the platform adapter degrades to offline mode without console noise.
-    if (p.startsWith('/api/')) {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end('{}');
+    // Plain static host: standalone play must never call own-server routes.
+    if (p.startsWith('/api') || p.startsWith('/ws')) {
+      ownServerHits.push(p);
+      res.writeHead(404); res.end();
       return;
     }
     const file = normalize(join(ROOT, p));
@@ -340,6 +340,7 @@ async function runPass(passName, contextOpts) {
       });
     }
 
+    if (ownServerHits.length) errors.push('own-server requests while standalone: ' + ownServerHits.join(', '));
     const bad = errors.slice();
     if (bad.length) throw new Error(`page errors in ${passName} pass:\n` + bad.join('\n'));
     console.log(`ok - [${passName}] no page errors`);

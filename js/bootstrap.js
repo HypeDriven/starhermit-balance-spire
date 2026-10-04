@@ -1,24 +1,11 @@
 /* Balance Spire — bootstrap: capability detection, module wiring,
  * lifecycle (visibility, resize, orientation, DPR), the fixed-step
- * simulation pump, and anonymous funnel telemetry (consent-gated).
+ * simulation pump.
  * Load order: after all plain scripts; render.js is an ES module that
  * dispatches 'bs-render-ready' when window.BSRender is available.
  */
 (function () {
   'use strict';
-
-  function funnel(name, data) {
-    if (!BSSession.settings.analytics) return;
-    // Anonymous, aggregate-only funnel events: start, tutorial step,
-    // round end, retry, settings change, error category. Never raw text.
-    try {
-      if (navigator.sendBeacon && BSPlatform.hosted) {
-        navigator.sendBeacon('/api/v1/funnel', JSON.stringify({
-          e: name, d: data || {}, t: Date.now()
-        }));
-      }
-    } catch (e) { /* telemetry must never break play */ }
-  }
 
   function webglAvailable() {
     try {
@@ -51,16 +38,47 @@
     });
     if (render) BSUI.applySettingsToDom();
 
-    BSPlatform.syncTime().then(function (hosted) {
-      var net = document.getElementById('title-net');
-      if (!hosted) {
-        net.textContent = 'Offline mode — daily and boards will sync when hosted.';
-        return;
+    // ---------- StarHermit: cloud save, settings KV, bindings, auth ----------
+    var cloudReady = false, settingsReady = false;
+    BSSession.on('progress', function (p) { if (cloudReady) BSPlatform.saveCloud({ v: 1, progress: p }); });
+    BSSession.on('settings', function (st) { if (settingsReady) BSPlatform.mirrorSettings(st); });
+    BSPlatform.onAuth(function (a) {
+      BSUI.refreshAccount();
+      if (!a.signedIn) {
+        cloudReady = settingsReady = false;
+        var T = window.BSGraphicsPanel && window.BSGraphicsPanel.accountStrings();
+        if (T) document.getElementById('title-net').textContent = T.signedOut;
       }
-      net.textContent = 'Connected — daily and boards are live.';
-      // With a launch token the signed-in player's nickname is shown here.
-      BSPlatform.displayName().then(function (name) {
-        if (name) net.textContent = 'Connected as ' + name + ' — daily and boards are live.';
+    });
+    if (BSPlatform.tokenHosted) {
+      Promise.all([
+        BSPlatform.loadCloud(), BSPlatform.getSettings(), BSPlatform.loadBindings(BSUI.DEFAULT_BINDINGS)
+      ]).then(function (r) {
+        // Remote progress wins over the local copy; localStorage stays the cache.
+        var doc = r[0];
+        if (doc && doc.progress && BSSession.adoptProgress(doc.progress)) BSUI.refreshTitleMeta();
+        cloudReady = true;
+        if (!doc) BSPlatform.saveCloud({ v: 1, progress: BSSession.progress });
+        // Platform settings win over local defaults.
+        var ps = r[1] || {};
+        settingsReady = true;
+        var st = BSSession.settings;
+        Object.keys(BSSession.DEFAULT_SETTINGS).forEach(function (k) { if (k in ps) st[k] = ps[k]; });
+        BSSession.saveSettings(); // also seeds the KV with local-only keys
+        BSUI.syncSettingsForm();
+        BSUI.applySettingsToDom();
+        BSUI.setBindings(r[2]);
+      });
+    }
+    window.addEventListener('pagehide', function () { BSPlatform.flushCloud(); });
+
+    // Signed in: server time + nickname. Standalone: local clock, no request.
+    BSPlatform.syncTime().then(function () {
+      var net = document.getElementById('title-net');
+      net.textContent = 'Local play — boards are kept on this device.';
+      var T = window.BSGraphicsPanel && window.BSGraphicsPanel.accountStrings();
+      if (T) BSPlatform.displayName().then(function (name) {
+        if (name && BSPlatform.tokenHosted) net.textContent = T.playingAs.replace('{name}', name) + ' · ' + T.synced;
       });
     });
 
@@ -108,6 +126,7 @@
           BSUI.showScreen('paused');
         }
         BSSession.saveSnapshot();
+        BSPlatform.flushCloud();
       } else {
         BSAudio.duck(false);
       }
@@ -125,13 +144,6 @@
     window.addEventListener('bs-gl-restored', function () {
       document.getElementById('gl-fallback').hidden = true;
     });
-
-    // Funnel hooks (consent-gated inside funnel()).
-    BSSession.on('phase', function (p) { if (p === 'active') funnel('round-start'); });
-    BSSession.on('results', function () { funnel('round-end'); });
-    BSSession.on('lesson-done', function (l) { funnel('tutorial-step', { id: l.id }); });
-    BSSession.on('settings', function () { funnel('settings-change'); });
-    window.addEventListener('error', function () { funnel('error', { kind: 'js' }); });
 
     document.getElementById('app').dataset.screen = 'title';
   }

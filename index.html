@@ -77,6 +77,10 @@
           <button id="btn-boards" class="btn subtle" type="button">Leaderboards</button>
           <button id="btn-settings" class="btn subtle" type="button">Settings</button>
         </div>
+        <div id="title-account" class="title-row" hidden>
+          <button id="btn-sign-in" class="btn subtle" type="button" hidden>Sign in with StarHermit</button>
+          <button id="btn-invite" class="btn subtle" type="button" hidden>Invite a friend</button>
+        </div>
         <p id="title-progress" class="dim"></p>
         <p id="title-net" class="dim" role="status"></p>
       </div>
@@ -181,10 +185,6 @@
           <label><input type="checkbox" name="haptics" checked> Haptics</label>
           <button id="btn-replay-tutorial" class="btn" type="button">Replay tutorial</button>
         </fieldset>
-        <fieldset>
-          <legend>Privacy</legend>
-          <label><input type="checkbox" name="analytics"> Share anonymous usage funnels</label>
-        </fieldset>
       </form>
       <button class="btn subtle back" data-back type="button">Done</button>
     </section>
@@ -209,6 +209,7 @@
 <script type="importmap">
 { "imports": { "three": "./vendor/three.module.min.js", "three/addons/": "./vendor/three/addons/" } }
 </script>
+<script src="starhermit-sdk.js"></script>
 <script src="js/rng.js"></script>
 <script src="js/rules.js"></script>
 <script src="js/content.js"></script>

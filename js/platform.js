@@ -1,85 +1,40 @@
-/* Balance Spire — platform adapter: host handshake, server time sync,
- * daily/score submission, achievements, presence, activity lifecycle,
- * launch-token lifecycle (fragment read + refresh) and profile nickname
- * resolution for board rows.
+/* Balance Spire — platform adapter over window.StarHermit (starhermit-sdk.js,
+ * loaded first). Two surfaces:
+ *  - StarHermit (via the SDK): launch token + renewal, sign-in, profile
+ *    nicknames, cloud save (progress), settings KV, invite link, control
+ *    bindings. All of these are no-ops without a token — no request is made.
+ *  - Server time: GET /api/v1/time, only when signed in (launch token);
+ *    standalone uses the local clock and makes no own-server request.
+ *  - Boards (daily + score chase) are local to this device (localStorage
+ *    bs.boards.v1); achievements live in the progress document.
  *
- * The platform opens the game as index.html#game_token=<jwt> (optional
- * &session_id=), stripped from the URL after the read. The JWT carries
- * sub = user id and game_scope = this game's slug — never hard-coded.
- * Same-origin /api only: the game's own host script serves the daily/score
- * boards, achievements, activity and funnel routes below, so they work on
- * the platform and in local dev alike; the profile route is a platform
- * endpoint (GET /api/v1/users/{id}/profile) and degrades to a neutral
- * "Player <id8>" fallback off-platform. Every call degrades gracefully to
- * offline local play when the host is absent.
- *
- * Identity: when a launch token is present the account id (JWT sub) is sent
- * as X-Player-Id so board rows attach to the account and resolve to
- * nicknames; offline keeps the persistent anonymous bs.playerId.
- * No tokens in local storage; the launch token is kept in memory.
+ * Identity: board rows carry the account id (JWT sub) when signed in so they
+ * resolve to nicknames; otherwise the persistent anonymous bs.playerId.
+ * No tokens in local storage; the launch token is kept in memory by the SDK.
  * UMD: window.BSPlatform / Node.
  */
 (function (root, factory) {
-  var api = factory();
+  var api = factory(root);
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.BSPlatform = api;
-})(typeof self !== 'undefined' ? self : this, function () {
+})(typeof self !== 'undefined' ? self : this, function (root) {
   'use strict';
 
-  var REFRESH_MS = 45 * 60 * 1000;  // token lives 60 min; re-mint at 45
-  var RETRY_MS = 60 * 1000;         // failed refresh retry
+  var SH = root.StarHermit || null;
+  // Read the launch fragment as early as possible (before any other script).
+  if (SH && !SH.__bsInit) { SH.init(); SH.__bsInit = true; }
 
-  var launchToken = null, gameSlug = null, userId = null;
+  var gameSlug = null;
   var hosted = false;
   var timeOffsetMs = 0; // serverNow - clientNow, RTT-adjusted
   var anonPlayerId = null;
-  var refreshTimer = null, retryTimer = null;
-  var heartbeatTimer = null, activityOpen = false;
-  var profileCache = {}; // userId -> Promise<string> display name
+  var pushedSettings = null;
 
-  function decodeJwt(t) {
-    try {
-      var seg = String(t).split('.')[1];
-      if (!seg) return null;
-      var b64 = seg.replace(/-/g, '+').replace(/_/g, '/');
-      b64 += '='.repeat((4 - (b64.length % 4)) % 4);
-      var bin = atob(b64);
-      var bytes = new Uint8Array(bin.length);
-      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      return JSON.parse(new TextDecoder().decode(bytes));
-    } catch (e) { return null; }
-  }
-
-  // Fragment first (the platform contract); query forms are local-dev only.
-  function readLaunchToken() {
-    try {
-      var h = new URLSearchParams(String(window.location.hash || '').replace(/^#/, ''));
-      var t = h.get('game_token');
-      if (t) {
-        h.delete('game_token');
-        h.delete('session_id');
-        var rest = h.toString();
-        if (window.history && window.history.replaceState)
-          window.history.replaceState(null, '',
-            window.location.pathname + window.location.search + (rest ? '#' + rest : ''));
-        return t;
-      }
-      var q = new URLSearchParams(window.location.search);
-      return q.get('launch_token') || q.get('token') || null;
-    } catch (e) { return null; }
-  }
+  function signedIn() { return !!(SH && SH.signedIn); }
+  function userId() { return signedIn() ? SH.userId : null; }
 
   function init() {
-    launchToken = readLaunchToken();
-    if (launchToken) {
-      var claims = decodeJwt(launchToken);
-      if (!claims) launchToken = null; // malformed: treat as standalone
-      else {
-        if (typeof claims.sub === 'string' && claims.sub) userId = claims.sub;
-        if (typeof claims.game_scope === 'string' && claims.game_scope) gameSlug = claims.game_scope;
-        if (!userId || !gameSlug) launchToken = null; // not a usable launch token
-      }
-    }
+    gameSlug = SH && SH.slug || null;
     try {
       var q = new URLSearchParams(window.location.search);
       if (!gameSlug) gameSlug = q.get('game') || null; // local-dev fallback only
@@ -93,126 +48,121 @@
         localStorage.setItem('bs.playerId', anonPlayerId);
       }
     } catch (e) { anonPlayerId = 'p-anon'; }
-    if (launchToken) startRefresh();
   }
 
-  // The account id when hosted, the anonymous id offline.
-  function playerId() { return userId || anonPlayerId; }
+  // The account id when signed in, the anonymous id offline.
+  function playerId() { return userId() || anonPlayerId; }
 
-  function headers() {
-    var h = { 'Content-Type': 'application/json', 'X-Player-Id': playerId() };
-    if (launchToken) h['Authorization'] = 'Bearer ' + launchToken;
-    return h;
-  }
-
-  function req(path, opts, timeoutMs) {
+  // Round-trip-adjusted sync with GET /api/v1/time — signed in only.
+  function syncTime() {
+    if (!signedIn() || !SH.token) { hosted = false; return Promise.resolve(false); }
+    var t0 = Date.now();
     var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    var timer = ctrl && setTimeout(function () { ctrl.abort(); }, timeoutMs || 8000);
-    return fetch(path, Object.assign({ headers: headers(), signal: ctrl && ctrl.signal }, opts))
+    var timer = ctrl && setTimeout(function () { ctrl.abort(); }, 8000);
+    return fetch('/api/v1/time', { headers: { 'Authorization': 'Bearer ' + SH.token }, signal: ctrl && ctrl.signal })
+      .then(function (r) { return r.json(); })
+      .catch(function () { return null; })
       .then(function (r) {
         if (timer) clearTimeout(timer);
-        if (r.status === 429) return { error: 'rate-limited' };
-        return r.json().catch(function () { return { error: 'bad-response' }; });
-      })
-      .catch(function () { return { error: 'offline' }; });
-  }
-
-  // Round-trip-adjusted sync with GET /api/v1/time.
-  function syncTime() {
-    var t0 = Date.now();
-    return req('/api/v1/time').then(function (r) {
-      // Platform contract is { serverTime }; the local dev server answers { now }.
-      var serverNow = r && (Number(r.serverTime) || Number(r.now));
-      if (serverNow) {
-        var rtt = Date.now() - t0;
-        timeOffsetMs = serverNow - (t0 + rtt / 2);
-        hosted = true;
-      } else {
-        hosted = false;
-      }
-      return hosted;
-    });
+        var serverNow = r && (Number(r.serverTime) || Number(r.now));
+        if (serverNow) {
+          var rtt = Date.now() - t0;
+          timeOffsetMs = serverNow - (t0 + rtt / 2);
+          hosted = true;
+        } else {
+          hosted = false;
+        }
+        return hosted;
+      });
   }
 
   function now() { return Date.now() + timeOffsetMs; }
 
-  // ---------- token refresh (scoped tokens may re-mint) ----------
-  function refreshToken() {
-    if (!launchToken || !gameSlug) return;
-    req('/api/v1/games/' + encodeURIComponent(gameSlug) + '/launch-token',
-        { method: 'POST', body: '{}' }).then(function (r) {
-      if (r && typeof r.token === 'string' && r.token) {
-        launchToken = r.token;
-        var claims = decodeJwt(launchToken);
-        if (claims && claims.sub) userId = claims.sub;
-        if (claims && claims.game_scope) gameSlug = claims.game_scope;
-      } else {
-        retryRefresh();
-      }
-    }).catch(retryRefresh);
-  }
-  function retryRefresh() {
-    if (retryTimer || !launchToken) return;
-    retryTimer = setTimeout(function () { retryTimer = null; refreshToken(); }, RETRY_MS);
-  }
-  function startRefresh() {
-    if (refreshTimer) clearInterval(refreshTimer);
-    refreshTimer = setInterval(refreshToken, REFRESH_MS);
-  }
-
-  // ---------- identity ----------
-  // Board/display names come from GET /api/v1/users/{id}/profile (nickname
-  // only — never the raw username, never /api/v1/me). Off-platform the call
-  // fails and the neutral "Player <id8>" fallback is used. Cached per id.
+  // ---------- identity (StarHermit profile; nickname, never /api/v1/me) ----------
   function profileFor(pid) {
     if (!pid || typeof pid !== 'string') return Promise.resolve('player');
-    if (profileCache[pid]) return profileCache[pid];
-    var p = req('/api/v1/users/' + encodeURIComponent(pid) + '/profile')
-      .then(function (r) {
-        var name = (r && typeof r.nickname === 'string' && r.nickname) ? r.nickname : null;
-        return name || ('Player ' + pid.slice(0, 8));
-      })
-      .catch(function () { return 'Player ' + pid.slice(0, 8); });
-    profileCache[pid] = p;
-    return p;
+    var fallback = 'Player ' + pid.slice(0, 8);
+    if (!SH || !signedIn()) return Promise.resolve(fallback);
+    return SH.profile(pid).then(function (p) { return p && p.nickname || fallback; }, function () { return fallback; });
   }
   // The signed-in player's display name, or null when anonymous.
   function displayName() {
-    if (!userId) return Promise.resolve(null);
-    return profileFor(userId);
+    if (!signedIn()) return Promise.resolve(null);
+    return SH.profile().then(function (p) { return p ? p.displayName : null; });
   }
 
-  // ---------- game-server routes (own host script; local dev + platform) ----------
+  // ---------- StarHermit: cloud save, settings, sign-in, invite, controls ----------
+  /** Remote save document ({ v, progress }) or null. */
+  function loadCloud() { return signedIn() ? SH.loadJSON() : Promise.resolve(null); }
+  /** Debounced cloud save of the progress document. */
+  function saveCloud(doc) { if (signedIn()) SH.saveJSON(doc); }
+  function flushCloud() { return signedIn() ? SH.flushSave(true) : Promise.resolve(false); }
+  /** Platform settings ({} when none / signed out). */
+  function getSettings() {
+    if (!signedIn()) return Promise.resolve({});
+    return SH.getSettings().then(function (s) { pushedSettings = JSON.parse(JSON.stringify(s || {})); return s || {}; });
+  }
+  /** Mirror changed keys of the settings object to the platform KV. */
+  function mirrorSettings(settings) {
+    if (!signedIn() || !settings) return Promise.resolve(null);
+    var base = pushedSettings || {};
+    var patch = {}, any = false;
+    Object.keys(settings).forEach(function (k) {
+      if (JSON.stringify(settings[k]) !== JSON.stringify(base[k])) { patch[k] = settings[k]; any = true; }
+    });
+    pushedSettings = JSON.parse(JSON.stringify(settings));
+    return any ? SH.patchSettings(patch) : Promise.resolve(null);
+  }
+  function canSignIn() { return !!(SH && SH.canSignIn()); }
+  function signIn() { return !!(SH && SH.signIn()); }
+  function inviteLink() { return signedIn() ? SH.inviteLink() : null; }
+  function loadBindings(defaults) {
+    var copy = JSON.parse(JSON.stringify(defaults));
+    if (!signedIn()) return Promise.resolve(copy);
+    return SH.loadBindings(defaults).catch(function () { return copy; });
+  }
+  /** fn({ signedIn, reason }) on StarHermit sign-in state changes. */
+  function onAuth(fn) { return SH ? SH.on('auth', fn) : function () {}; }
+
+  // ---------- local boards (this device only) ----------
+  var BOARD_KEY = 'bs.boards.v1', BOARD_MAX = 100;
+  function readBoards() {
+    try { var b = JSON.parse(localStorage.getItem(BOARD_KEY)); if (b && b.score && b.daily) return b; } catch (e) { /* fresh */ }
+    return { score: [], daily: {} };
+  }
+  function writeBoards(b) { try { localStorage.setItem(BOARD_KEY, JSON.stringify(b)); } catch (e) { /* full / blocked */ } }
+  function boardSort(a, b) {
+    return b.score - a.score || (a.drops || 0) - (b.drops || 0) || (a.durationSec || 0) - (b.durationSec || 0) || a.at - b.at;
+  }
+  function record(rows, payload, onePerPlayer) {
+    var r = payload.result || {};
+    var row = { playerId: playerId(), score: Number(r.score && r.score.total != null ? r.score.total : r.score) || 0,
+      drops: r.drops || 0, durationSec: payload.durationSec || 0, at: Date.now() };
+    if (onePerPlayer) {
+      var i = rows.findIndex(function (x) { return x.playerId === row.playerId; });
+      if (i >= 0) { if (boardSort(row, rows[i]) < 0) rows[i] = row; else row = rows[i]; }
+      else rows.push(row);
+    } else rows.push(row);
+    rows.sort(boardSort);
+    rows.length = Math.min(rows.length, BOARD_MAX);
+    var rank = rows.indexOf(row) + 1;
+    return { rank: rank > 0 ? rank : null, total: rows.length };
+  }
   function submitDaily(date, payload) {
-    return req('/api/v1/daily/submit', { method: 'POST', body: JSON.stringify(payload) });
+    var b = readBoards();
+    var rows = b.daily[date] = b.daily[date] || [];
+    var out = record(rows, payload, true);
+    writeBoards(b);
+    return Promise.resolve(out);
   }
-  function dailyBoard(date) {
-    return req('/api/v1/daily/board?date=' + encodeURIComponent(date));
-  }
+  function dailyBoard(date) { return Promise.resolve({ rows: (readBoards().daily[date] || []).slice() }); }
   function submitScore(payload) {
-    return req('/api/v1/score/submit', { method: 'POST', body: JSON.stringify(payload) });
+    var b = readBoards();
+    var out = record(b.score, payload, false);
+    writeBoards(b);
+    return Promise.resolve(out);
   }
-  function scoreBoard() { return req('/api/v1/score/board'); }
-
-  function unlockAchievement(key) {
-    if (!hosted) return Promise.resolve({ error: 'offline' });
-    return req('/api/v1/achievements/unlock', { method: 'POST', body: JSON.stringify({ key: key }) });
-  }
-
-  function activityStart() {
-    if (!hosted || activityOpen) return;
-    activityOpen = true;
-    req('/api/v1/activity/start', { method: 'POST', body: '{}' });
-    heartbeatTimer = setInterval(function () {
-      req('/api/v1/presence/heartbeat', { method: 'POST', body: '{}' });
-    }, 30000);
-  }
-  function activityEnd() {
-    if (!hosted || !activityOpen) return;
-    activityOpen = false;
-    if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
-    req('/api/v1/activity/end', { method: 'POST', body: '{}' });
-  }
+  function scoreBoard() { return Promise.resolve({ rows: readBoards().score.slice() }); }
 
   return {
     init: init,
@@ -224,13 +174,20 @@
     dailyBoard: dailyBoard,
     submitScore: submitScore,
     scoreBoard: scoreBoard,
-    unlockAchievement: unlockAchievement,
-    activityStart: activityStart,
-    activityEnd: activityEnd,
+    loadCloud: loadCloud,
+    saveCloud: saveCloud,
+    flushCloud: flushCloud,
+    getSettings: getSettings,
+    mirrorSettings: mirrorSettings,
+    canSignIn: canSignIn,
+    signIn: signIn,
+    inviteLink: inviteLink,
+    loadBindings: loadBindings,
+    onAuth: onAuth,
     get hosted() { return hosted; },
-    get tokenHosted() { return !!launchToken; },
+    get tokenHosted() { return signedIn(); },
     get playerId() { return playerId(); },
-    get userId() { return userId; },
-    get gameSlug() { return gameSlug; }
+    get userId() { return userId(); },
+    get gameSlug() { return SH && SH.slug || gameSlug; }
   };
 });
