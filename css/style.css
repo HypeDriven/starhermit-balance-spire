@@ -47,6 +47,9 @@ body {
 #app { position: fixed; inset: 0; display: grid; }
 #playfield { position: absolute; inset: 0; }
 #gl-host, #gl-host canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+/* Large screens: every DOM UI layer above the (unzoomed, full-window) 3D canvas zooms by
+   --ui-scale (ui-scale.js; 1 up to 1600×1000); vw/vh inside them are divided by it. */
+.hud, .tray, .screen, .caption, .toast, .overlay.center, .fps-meter, #gl-fallback { zoom: var(--ui-scale, 1); }
 
 /* ---------- shared controls ---------- */
 .btn {
@@ -133,12 +136,12 @@ html.left-handed .tray { flex-direction: row-reverse; }
 }
 .screen h2 { margin: 0; }
 .title-card { text-align: center; display: flex; flex-direction: column; gap: .6rem; align-items: center; }
-.game-title { font-size: clamp(2.2rem, 8vw, 4rem); margin: 0; letter-spacing: .04em; color: var(--accent); text-shadow: 0 0 24px rgba(255, 217, 160, .35); }
+.game-title { font-size: clamp(2.2rem, calc(8vw / var(--ui-scale, 1)), 4rem); margin: 0; letter-spacing: .04em; color: var(--accent); text-shadow: 0 0 24px rgba(255, 217, 160, .35); }
 .tagline { color: var(--ink-dim); margin: 0 0 .8rem; }
 .title-row { display: flex; gap: .5em; flex-wrap: wrap; justify-content: center; }
 
 .card-grid {
-  display: grid; gap: .8rem; width: min(92vw, 640px);
+  display: grid; gap: .8rem; width: min(calc(92vw / var(--ui-scale, 1)), 640px);
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
 }
 .card {
@@ -151,7 +154,7 @@ html.left-handed .tray { flex-direction: row-reverse; }
 .card span { color: var(--ink-dim); }
 .card em { color: var(--accent-2); font-style: normal; font-size: .85rem; }
 
-.list { display: flex; flex-direction: column; gap: 4px; width: min(92vw, 560px); max-height: 50vh; overflow-y: auto; }
+.list { display: flex; flex-direction: column; gap: 4px; width: min(calc(92vw / var(--ui-scale, 1)), 560px); max-height: calc(50vh / var(--ui-scale, 1)); overflow-y: auto; }
 .list button {
   display: flex; justify-content: space-between; gap: 1em; align-items: baseline;
   background: var(--panel); border: 1px solid var(--line); color: var(--ink);
@@ -165,7 +168,7 @@ html.left-handed .tray { flex-direction: row-reverse; }
 .pager { justify-content: center; }
 .pager span { min-width: 4em; text-align: center; }
 
-.score-table { border-collapse: collapse; min-width: min(88vw, 320px); }
+.score-table { border-collapse: collapse; min-width: min(calc(88vw / var(--ui-scale, 1)), 320px); }
 .score-table caption { text-align: left; color: var(--ink-dim); padding-bottom: .3em; }
 .score-table td, .score-table th { padding: .25em .8em; text-align: left; font-weight: 400; }
 .score-table td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
@@ -177,7 +180,7 @@ html.left-handed .tray { flex-direction: row-reverse; }
   padding: .3em .9em; font-size: .9rem; color: var(--accent);
 }
 
-.settings-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); width: min(94vw, 760px); }
+.settings-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); width: min(calc(94vw / var(--ui-scale, 1)), 760px); }
 .settings-grid fieldset { border: 1px solid var(--line); border-radius: var(--radius); display: flex; flex-direction: column; gap: .55em; }
 .settings-grid legend { color: var(--ink-dim); padding: 0 .4em; }
 .settings-grid label { display: flex; justify-content: space-between; align-items: center; gap: .8em; min-height: 32px; }
@@ -222,7 +225,7 @@ html.left-handed .tray { flex-direction: row-reverse; }
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
   z-index: 15; pointer-events: none;
 }
-#countdown-num { font-size: clamp(4rem, 20vw, 9rem); font-weight: 800; color: var(--accent); text-shadow: 0 0 40px rgba(255,217,160,.5); }
+#countdown-num { font-size: clamp(4rem, calc(20vw / var(--ui-scale, 1)), 9rem); font-weight: 800; color: var(--accent); text-shadow: 0 0 40px rgba(255,217,160,.5); }
 
 /* ---------- high contrast ---------- */
 html.high-contrast {
