@@ -90,7 +90,9 @@ window.BSUI = (function (root) {
     if (name) {
       var node = document.querySelector('.screen[data-screen="' + name + '"]');
       var f = node && node.querySelector('button, [href], input, select');
-      if (f) f.focus();
+      if (f) f.focus({ preventScroll: true });
+      // Open at the top (heading visible) even if a previous visit scrolled it.
+      if (node) { node.scrollTop = 0; node.querySelectorAll('*').forEach(function (e) { if (e.scrollTop) e.scrollTop = 0; }); }
     }
     document.getElementById('app').dataset.screen = name || 'play';
   }
