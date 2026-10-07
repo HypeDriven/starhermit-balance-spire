@@ -31,14 +31,15 @@ File map (all shipped unless marked dev):
 | `js/audio.js` | Web Audio buses, authored Opus one-shots with synthesized fallbacks, ambience loop, adaptive pad music, captions. |
 | `js/platform.js` | StarHermit adapter, signed-in-only time sync, local daily/score boards. |
 | `js/bootstrap.js` | WebGL detection, module wiring, main loop, lifecycle. |
-| `server.js` | StarHermit Game Script: static host plus authoritative replay validation, boards, achievements, activity. |
+| `score-script.js` | StarHermit platform script (`server=`): range-checks a finished ranked round's total and posts it to the `high-score` leaderboard (canonical copy in the games repo's `tools/score-script.js`). |
+| `server.js` | Local dev server: static host plus replay validation, boards, achievements, activity routes (not deployed as the platform script). |
 | `assets/title-backdrop.webp`, `assets/slab-stone.webp` | Authored key art behind the title screen; limestone grain on slab materials. |
 | `sfx/*.opus`, `sfx/manifest.txt` | 15 authored clips and the canonical event binding table (`manifest.json` drives regeneration). |
 | `coverart.png`, `icon.png`, `favicon.svg` | Store cover (1200×675), launcher icon, tab icon. |
 | `data/` | Server-side JSON store (boards, achievements, playtime, funnel counts); git-ignored, never served. |
 | `tests/rules.test.js`, `tests/server.test.js`, `tests/gfx.test.js`, `tests/platform.test.mjs`, `tests/e2e.mjs` | Dev only: rules/content properties, validation, the graphics model and panel strings, the StarHermit adapter, and the Playwright playthrough. |
 | `starhermit-sdk.js` | Canonical StarHermit client (verbatim copy, `window.StarHermit`). |
-| `starhermit.txt` | `name=Balance Spire`, `launch=index.html`, `server=server.js`, `cover=coverart.png`. |
+| `starhermit.txt` | `name=Balance Spire`, `launch=index.html`, `server=score-script.js`, `cover=coverart.png`. |
 
 ## 2. Vision and design pillars
 
@@ -226,7 +227,7 @@ The product target is en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR an
 
 ## 12. StarHermit integration
 
-Manifest: `starhermit.txt` declares `launch=index.html`, `server=server.js`, `cover=coverart.png`, owner id. The Game Script (`server.js`, zero dependencies, `PORT` env or argv) serves the distribution and the same-origin API; it refuses `data/`, `tests/`, `tools/`, `node_modules/` and dotfiles.
+Manifest: `starhermit.txt` declares `launch=index.html`, `server=score-script.js`, `cover=coverart.png`, owner id. The local dev server (`server.js`, zero dependencies, `PORT` env or argv) serves the distribution and the same-origin API; it refuses `data/`, `tests/`, `tools/`, `node_modules/` and dotfiles.
 
 Own-server use (`js/platform.js`): only `GET /api/v1/time`, and only when signed in (launch token) — RTT-adjusted offset; daily date uses `platform.now()`; success sets `hosted`. Standalone (no token) the game makes **no** same-origin `/api` or `/ws` request: it uses the local clock. Daily and score-chase boards are local to the device (`bs.boards.v1` in localStorage: one best row per player per daily date, score chase appended, 100 rows each, sorted by score, drops, duration); achievements live only in the progress document. There is no telemetry, presence or activity reporting. `server.js` still implements its replay-validated board/achievement routes (exercised by `tests/server.test.js`), but the client no longer calls them.
 
@@ -242,9 +243,11 @@ StarHermit platform (via `starhermit-sdk.js`, a verbatim copy of the canonical c
 | Invite | When signed in the title shows **Invite a friend**, which copies `StarHermit.inviteLink()` and confirms with a toast (or shows the link if the clipboard is blocked). |
 | Controls | `starhermit.txt` declares `control.drop`, `pause`, `back`, `undo`, `hint`, `camera`. Keydown routes by `event.code` through `StarHermit.loadBindings` (defaults standalone); the tray `<kbd>` hints and the How to play Keyboard card show the effective keys. |
 
-Sign-in, invite, toast and status strings exist in all nine locales (`ACCOUNT` in `js/graphics-panel.js`). Without a token no StarHermit or own-server request is made.
+**Leaderboard:** when signed in, every finished daily or score-chase round posts its total through `StarHermit.submitScores` (a practice session whose `score-script.js` posts it to the `high-score` board, integer, higher is better, 0–1,000,000), and the results screen shows "Leaderboard rank: #N" (or posted / not posted) under the local-board line. Journey, practice and Learn rounds post nothing; standalone play posts nothing and the line stays hidden.
 
-Not used: StarHermit achievements and leaderboards, the `server.js` board/achievement/activity/funnel routes, sessions, matchmaking, session invites, chat, replays, avatars (no player chip), WebSocket, realtime rooms, voice, containers. Conventions follow https://wiki.starhermit.com/.
+Sign-in, invite, toast, status and leaderboard strings exist in all nine locales (`ACCOUNT` in `js/graphics-panel.js`). Without a token no StarHermit or own-server request is made.
+
+Not used: StarHermit achievements, the `server.js` board/achievement/activity/funnel routes, sessions, matchmaking, session invites, chat, replays, avatars (no player chip), WebSocket, realtime rooms, voice, containers. Conventions follow https://wiki.starhermit.com/.
 
 ## 13. Technical architecture
 
@@ -285,7 +288,7 @@ QA bar as checkable statements: the first stage's intro is toasted and announced
 
 - No localization layer: English strings are literals in HTML/JS (§10).
 - Theme `unlockStars` values in `Content.THEMES` are data only; themes are assigned per stage and never gated by stars (`progress.themeUnlocksSeen` is unused).
-- Leaderboards are local to the device (no cross-player boards); rows resolve display names through the profile endpoint when signed in (own row marked "You").
+- The in-game Leaderboard screen is local to the device (the StarHermit `high-score` board is only reported as the rank line on results); rows resolve display names through the profile endpoint when signed in (own row marked "You").
 - A restored snapshot loses its lesson context (`lesson: null`), so a Learn round resumed after a crash no longer tracks its goal.
 - Gamepad bindings are fixed (no remapping UI); the setup screen has no gamepad focus navigation beyond browser defaults.
 - Score chase uses one immutable seed, so the slab phase sequence is identical every run (intentional for fairness, but memorisable).

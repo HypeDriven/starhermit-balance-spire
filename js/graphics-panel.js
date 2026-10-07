@@ -281,7 +281,11 @@
       "synced": "progress synced",
       "saving": "saving…",
       "syncOff": "cloud sync unavailable",
-      "signedOut": "Signed out of StarHermit — progress stays on this device."
+      "signedOut": "Signed out of StarHermit — progress stays on this device.",
+      "lbPosting": "Posting score to the leaderboard…",
+      "lbRank": "Leaderboard rank: #{rank}",
+      "lbPosted": "Score posted to the leaderboard.",
+      "lbNotPosted": "Score not posted to the leaderboard."
     },
     "en-GB": {
       "signIn": "Sign in with StarHermit",
@@ -293,7 +297,11 @@
       "synced": "progress synced",
       "saving": "saving…",
       "syncOff": "cloud sync unavailable",
-      "signedOut": "Signed out of StarHermit — progress stays on this device."
+      "signedOut": "Signed out of StarHermit — progress stays on this device.",
+      "lbPosting": "Posting score to the leaderboard…",
+      "lbRank": "Leaderboard rank: #{rank}",
+      "lbPosted": "Score posted to the leaderboard.",
+      "lbNotPosted": "Score not posted to the leaderboard."
     },
     "es-419": {
       "signIn": "Iniciar sesión con StarHermit",
@@ -305,7 +313,11 @@
       "synced": "progreso sincronizado",
       "saving": "guardando…",
       "syncOff": "sincronización en la nube no disponible",
-      "signedOut": "Sesión de StarHermit cerrada: el progreso se queda en este dispositivo."
+      "signedOut": "Sesión de StarHermit cerrada: el progreso se queda en este dispositivo.",
+      "lbPosting": "Enviando la puntuación a la clasificación…",
+      "lbRank": "Puesto en la clasificación: #{rank}",
+      "lbPosted": "Puntuación publicada en la clasificación.",
+      "lbNotPosted": "La puntuación no se publicó en la clasificación."
     },
     "es-ES": {
       "signIn": "Iniciar sesión con StarHermit",
@@ -317,7 +329,11 @@
       "synced": "progreso sincronizado",
       "saving": "guardando…",
       "syncOff": "sincronización en la nube no disponible",
-      "signedOut": "Sesión de StarHermit cerrada: el progreso se queda en este dispositivo."
+      "signedOut": "Sesión de StarHermit cerrada: el progreso se queda en este dispositivo.",
+      "lbPosting": "Enviando la puntuación a la clasificación…",
+      "lbRank": "Puesto en la clasificación: #{rank}",
+      "lbPosted": "Puntuación publicada en la clasificación.",
+      "lbNotPosted": "La puntuación no se ha publicado en la clasificación."
     },
     "de-DE": {
       "signIn": "Mit StarHermit anmelden",
@@ -329,7 +345,11 @@
       "synced": "Fortschritt synchronisiert",
       "saving": "wird gespeichert …",
       "syncOff": "Cloud-Synchronisierung nicht verfügbar",
-      "signedOut": "Von StarHermit abgemeldet – der Fortschritt bleibt auf diesem Gerät."
+      "signedOut": "Von StarHermit abgemeldet – der Fortschritt bleibt auf diesem Gerät.",
+      "lbPosting": "Punktzahl wird an die Bestenliste gesendet…",
+      "lbRank": "Rang in der Bestenliste: #{rank}",
+      "lbPosted": "Punktzahl in der Bestenliste eingetragen.",
+      "lbNotPosted": "Punktzahl nicht in der Bestenliste eingetragen."
     },
     "fr-FR": {
       "signIn": "Se connecter avec StarHermit",
@@ -341,7 +361,11 @@
       "synced": "progression synchronisée",
       "saving": "enregistrement…",
       "syncOff": "synchronisation cloud indisponible",
-      "signedOut": "Déconnecté de StarHermit : la progression reste sur cet appareil."
+      "signedOut": "Déconnecté de StarHermit : la progression reste sur cet appareil.",
+      "lbPosting": "Envoi du score au classement…",
+      "lbRank": "Rang au classement : #{rank}",
+      "lbPosted": "Score publié au classement.",
+      "lbNotPosted": "Score non publié au classement."
     },
     "fr-CA": {
       "signIn": "Se connecter avec StarHermit",
@@ -353,7 +377,11 @@
       "synced": "progression synchronisée",
       "saving": "enregistrement…",
       "syncOff": "synchronisation infonuagique indisponible",
-      "signedOut": "Déconnecté de StarHermit : la progression reste sur cet appareil."
+      "signedOut": "Déconnecté de StarHermit : la progression reste sur cet appareil.",
+      "lbPosting": "Envoi du pointage au classement…",
+      "lbRank": "Rang au classement : #{rank}",
+      "lbPosted": "Pointage publié au classement.",
+      "lbNotPosted": "Pointage non publié au classement."
     },
     "pt-BR": {
       "signIn": "Entrar com a StarHermit",
@@ -365,7 +393,11 @@
       "synced": "progresso sincronizado",
       "saving": "salvando…",
       "syncOff": "sincronização na nuvem indisponível",
-      "signedOut": "Você saiu da StarHermit — o progresso continua neste dispositivo."
+      "signedOut": "Você saiu da StarHermit — o progresso continua neste dispositivo.",
+      "lbPosting": "Enviando a pontuação para o placar…",
+      "lbRank": "Posição no placar: #{rank}",
+      "lbPosted": "Pontuação enviada ao placar.",
+      "lbNotPosted": "A pontuação não foi enviada ao placar."
     },
     "it-IT": {
       "signIn": "Accedi con StarHermit",
@@ -377,7 +409,11 @@
       "synced": "progressi sincronizzati",
       "saving": "salvataggio…",
       "syncOff": "sincronizzazione cloud non disponibile",
-      "signedOut": "Disconnesso da StarHermit: i progressi restano su questo dispositivo."
+      "signedOut": "Disconnesso da StarHermit: i progressi restano su questo dispositivo.",
+      "lbPosting": "Invio del punteggio alla classifica…",
+      "lbRank": "Posizione in classifica: #{rank}",
+      "lbPosted": "Punteggio pubblicato in classifica.",
+      "lbNotPosted": "Punteggio non pubblicato in classifica."
     }
   };
   function accountStrings() { return ACCOUNT[pickLocale()] || ACCOUNT['en-US']; }

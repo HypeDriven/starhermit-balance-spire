@@ -446,6 +446,21 @@ window.BSUI = (function (root) {
     } else {
       el.resultsBoard.textContent = '';
     }
+    postToLeaderboard(S.isRanked() ? s.score.total : null);
+  }
+
+  // Signed-in ranked rounds only: post the total and show the player's board rank.
+  function postToLeaderboard(total) {
+    var line = $('results-lb');
+    if (!line) return;
+    if (total == null || !P.tokenHosted) { line.hidden = true; line.textContent = ''; return; }
+    var T = accountStrings();
+    line.hidden = false;
+    line.textContent = T.lbPosting;
+    P.postLeaderboard(total).then(function (r) {
+      line.textContent = !r.posted ? T.lbNotPosted
+        : r.rank ? T.lbRank.replace('{rank}', r.rank) : T.lbPosted;
+    });
   }
 
   function envelopePayload(env) {
