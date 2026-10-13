@@ -31,7 +31,7 @@
       var g = ctx.createGain();
       g.gain.value = name === 'music' ? 0.4 : name === 'ambience' ? 0.35 : 0.8;
       g.connect(master);
-      buses[name] = g;
+      buses[name] = (globalThis.GameOptions ? globalThis.GameOptions.tagBus(g, name) : g);
     });
     startAmbience();
     startMusic();
@@ -57,7 +57,7 @@
   function blip(bus, freq, dur, type, gain, slide) {
     if (!ctx) return;
     var t = ctx.currentTime;
-    var o = ctx.createOscillator(), g = ctx.createGain();
+    var o = (globalThis.GameOptions ? globalThis.GameOptions.trackSource(ctx.createOscillator(), bus) : ctx.createOscillator()), g = ctx.createGain();
     o.type = type || 'sine';
     o.frequency.setValueAtTime(freq, t);
     if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, slide), t + dur);
@@ -73,7 +73,7 @@
     var buf = ctx.createBuffer(1, len, ctx.sampleRate);
     var d = buf.getChannelData(0);
     for (var i = 0; i < len; i++) d[i] = (avRng.next() * 2 - 1) * (1 - i / len);
-    var src = ctx.createBufferSource(); src.buffer = buf;
+    var src = (globalThis.GameOptions ? globalThis.GameOptions.trackSource(ctx.createBufferSource(), bus) : ctx.createBufferSource()); src.buffer = buf;
     var f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = cutoff || 900;
     var g = ctx.createGain(); g.gain.value = gain || 0.4;
     src.connect(f); f.connect(g); g.connect(buses[bus]);
@@ -123,7 +123,7 @@
     if (!ctx) return false;
     var entry = sampleCache[name];
     if (entry && entry.state === 'ready') {
-      var src = ctx.createBufferSource();
+      var src = (globalThis.GameOptions ? globalThis.GameOptions.trackSource(ctx.createBufferSource(), name) : ctx.createBufferSource());
       src.buffer = entry.buffer;
       src.connect(buses.effects);
       src.start();
@@ -212,7 +212,7 @@
     var buf = ctx.createBuffer(1, len, ctx.sampleRate);
     var d = buf.getChannelData(0), r = RNG.derive(7, RNG.STREAM_AV);
     for (var i = 0; i < len; i++) d[i] = (r.next() * 2 - 1) * 0.3;
-    var src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
+    var src = (globalThis.GameOptions ? globalThis.GameOptions.trackSource(ctx.createBufferSource(), null) : ctx.createBufferSource()); src.buffer = buf; src.loop = true;
     var f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 240;
     var g = ctx.createGain(); g.gain.value = 0.6;
     src.connect(f); f.connect(g); g.connect(buses.ambience);
@@ -232,7 +232,7 @@
       return ctx.decodeAudioData(bytes);
     }).then(function (buffer) {
       if (!ambienceNodes || ambienceNodes.sample) return;
-      var src = ctx.createBufferSource(); src.buffer = buffer; src.loop = true;
+      var src = (globalThis.GameOptions ? globalThis.GameOptions.trackSource(ctx.createBufferSource(), null) : ctx.createBufferSource()); src.buffer = buffer; src.loop = true;
       var g = ctx.createGain(); g.gain.value = 0.9;
       src.connect(g); g.connect(buses.ambience);
       src.start();
