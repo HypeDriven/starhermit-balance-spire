@@ -121,6 +121,15 @@
     if (!signedIn()) return Promise.resolve(copy);
     return SH.loadBindings(defaults).catch(function () { return copy; });
   }
+  /**
+   * fn(remoteDoc) when a cloud write lost to a save made on another device
+   * (the SDK refused the conditional PUT): the cloud copy has been reloaded,
+   * which lifts the write block; the caller merges and saves again.
+   */
+  function onSaveConflict(fn) {
+    if (!SH) return function () {};
+    return SH.on('saveconflict', function () { SH.loadJSON().then(fn); });
+  }
   /** fn({ signedIn, reason }) on StarHermit sign-in state changes. */
   function onAuth(fn) { return SH ? SH.on('auth', fn) : function () {}; }
 
@@ -197,6 +206,7 @@
     inviteLink: inviteLink,
     loadBindings: loadBindings,
     onAuth: onAuth,
+    onSaveConflict: onSaveConflict,
     get hosted() { return hosted; },
     get tokenHosted() { return signedIn(); },
     get playerId() { return playerId(); },

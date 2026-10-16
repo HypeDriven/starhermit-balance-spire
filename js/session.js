@@ -356,6 +356,32 @@
     saveSettings: saveSettings,
     get progress() { return progress; },
     saveProgress: saveProgress,
+    /**
+     * Combine two progress documents after a cloud-save conflict: more stars per
+     * stage, best daily and overall scores, every unlocked achievement (earliest
+     * time), the larger lifetime counters; neither side's progress is lost.
+     */
+    mergeProgress: function (remote, local) {
+      var a = Object.assign(defaultProgress(), remote || {}), b = Object.assign(defaultProgress(), local || {});
+      function maxMap(x, y, keepMin) {
+        var m = {}, k;
+        for (k in x) m[k] = x[k];
+        for (k in y) m[k] = k in m ? (keepMin ? Math.min(m[k], y[k]) : Math.max(m[k], y[k])) : y[k];
+        return m;
+      }
+      var out = defaultProgress();
+      out.journeyStars = maxMap(a.journeyStars, b.journeyStars);
+      out.stars = Object.keys(out.journeyStars).reduce(function (n, k) { return n + (Number(out.journeyStars[k]) || 0); }, 0);
+      out.tutorialDone = !!(a.tutorialDone || b.tutorialDone);
+      out.dailies = maxMap(a.dailies, b.dailies);
+      out.bestScore = Math.max(a.bestScore || 0, b.bestScore || 0);
+      out.bestHeight = Math.max(a.bestHeight || 0, b.bestHeight || 0);
+      out.perfectsTotal = Math.max(a.perfectsTotal || 0, b.perfectsTotal || 0);
+      out.achievements = maxMap(a.achievements, b.achievements, true);
+      out.themeUnlocksSeen = (a.themeUnlocksSeen || []).concat(b.themeUnlocksSeen || [])
+        .filter(function (v, i, arr) { return arr.indexOf(v) === i; });
+      return out;
+    },
     /** Adopt a progress document from the cloud save (remote wins). */
     adoptProgress: function (p) {
       if (!p || typeof p !== 'object' || !p.achievements) return false;

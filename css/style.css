@@ -245,6 +245,9 @@ html.high-contrast {
   .hud-stat { min-width: 2.6em; }
   .tray { width: calc(100% - 16px - var(--sal) - var(--sar)); justify-content: center; }
   .tray .btn { flex: 1 1 auto; padding: .6em .4em; }
+  /* Translated labels (e.g. "Rückgängig") share the row instead of overflowing. */
+  .tray .btn, .tray .btn:not(.primary) { min-width: 0; flex: 1 1 0; padding: .6em .25em; }
+  .tray .btn.primary { flex-grow: 1.25; }
   .tray .btn kbd { display: none; }
 }
 /* Landscape mobile: narrow status rail, tray pinned right */

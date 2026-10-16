@@ -129,6 +129,8 @@
   var PRIMARY = { en: 'en-US', es: 'es-419', fr: 'fr-FR', de: 'de-DE', pt: 'pt-BR', it: 'it-IT' };
 
   function pickLocale() {
+    // The game language (js/i18n.js + sh-language.js) when present.
+    if (root.BSI18n && STRINGS[root.BSI18n.lang]) return root.BSI18n.lang;
     var langs = (navigator.languages && navigator.languages.length) ? navigator.languages : [navigator.language || 'en-US'];
     for (var i = 0; i < langs.length; i++) {
       var l = String(langs[i]);
@@ -156,23 +158,27 @@
     if (text != null) e.textContent = text;
     return e;
   }
-  function row(labelText, control, forId) {
+  // Label text is a function of T so relabel() can switch language in place.
+  var labels = [];
+  function bindText(node, fn) { labels.push([node, fn]); node.textContent = fn(); return node; }
+  function row(labelFn, control, forId) {
     var l = el('label', { 'for': forId, 'class': 'gfx-row' });
-    l.appendChild(el('span', null, labelText));
+    l.appendChild(bindText(el('span'), labelFn));
     l.appendChild(control);
     return l;
   }
 
   function build() {
     host.textContent = '';
+    labels = [];
     host.setAttribute('lang', locale);
-    host.appendChild(el('legend', null, T.graphics));
+    host.appendChild(bindText(el('legend'), function () { return T.graphics; }));
 
     var preset = el('select', { id: 'gfx-preset', 'data-gfx': 'preset' });
     preset.addEventListener('change', function () {
       commit(G.choosePreset(saved(), preset.value === 'auto' ? undefined : preset.value));
     });
-    host.appendChild(row(T.quality, preset, 'gfx-preset'));
+    host.appendChild(row(function () { return T.quality; }, preset, 'gfx-preset'));
 
     var scaleWrap = el('span', { 'class': 'gfx-scale' });
     var scale = el('input', { id: 'gfx-scale', type: 'range', min: '50', max: '200', step: '10', 'data-gfx': 'render_scale' });
@@ -182,7 +188,7 @@
       var n = Object.assign({}, saved()); n.render_scale = Number(scale.value) / 100; commit(n);
     });
     scaleWrap.appendChild(scale); scaleWrap.appendChild(out);
-    host.appendChild(row(T.renderScale, scaleWrap, 'gfx-scale'));
+    host.appendChild(row(function () { return T.renderScale; }, scaleWrap, 'gfx-scale'));
 
     var grid = el('div', { 'class': 'gfx-cats' });
     Object.keys(G.CATEGORIES).forEach(function (cat) {
@@ -192,22 +198,23 @@
         if (sel.value === 'preset') delete n[cat]; else n[cat] = sel.value;
         commit(n);
       });
-      grid.appendChild(row(T.cats[cat], sel, 'gfx-' + cat));
+      grid.appendChild(row(function () { return T.cats[cat]; }, sel, 'gfx-' + cat));
     });
     host.appendChild(grid);
 
-    [['adaptive', 'gfx-adaptive', T.adaptive], ['show_fps', 'gfx-fps', T.showFps]].forEach(function (d) {
+    [['adaptive', 'gfx-adaptive', 'adaptive'], ['show_fps', 'gfx-fps', 'showFps']].forEach(function (d) {
       var cb = el('input', { id: d[1], type: 'checkbox', 'data-gfx': d[0] });
       cb.addEventListener('change', function () {
         var n = Object.assign({}, saved()); n[d[0]] = cb.checked; commit(n);
       });
       var l = el('label', { 'for': d[1], 'class': 'gfx-check' });
-      l.appendChild(cb); l.appendChild(document.createTextNode(' ' + d[2]));
+      l.appendChild(cb); l.appendChild(document.createTextNode(' '));
+      l.appendChild(bindText(el('span'), function () { return T[d[2]]; }));
       host.appendChild(l);
     });
 
     host.appendChild(el('p', { id: 'gfx-summary', 'class': 'dim gfx-summary' }));
-    var note = el('p', { id: 'gfx-post-note', 'class': 'gfx-note' }, T.postFailed);
+    var note = bindText(el('p', { id: 'gfx-post-note', 'class': 'gfx-note' }), function () { return T.postFailed; });
     note.hidden = true;
     host.appendChild(note);
     ['gfx-preset', 'gfx-scale', 'gfx-scale-out', 'gfx-adaptive', 'gfx-fps', 'gfx-summary', 'gfx-post-note']
@@ -267,6 +274,16 @@
     setInterval(function () {
       if (host.offsetParent !== null) updateSummary();
     }, 1000);
+  }
+
+  /** Switch the section to the current game language without rebuilding it. */
+  function relabel() {
+    if (!host) return;
+    locale = pickLocale();
+    T = STRINGS[locale] || EN;
+    host.setAttribute('lang', locale);
+    labels.forEach(function (l) { l[0].textContent = l[1](); });
+    refresh();
   }
 
   // StarHermit account strings (sign-in, invite, toast, title status line).
@@ -418,6 +435,6 @@
   };
   function accountStrings() { return ACCOUNT[pickLocale()] || ACCOUNT['en-US']; }
 
-  root.BSGraphicsPanel = { init: init, refresh: refresh, STRINGS: STRINGS, pickLocale: pickLocale,
+  root.BSGraphicsPanel = { init: init, refresh: refresh, relabel: relabel, STRINGS: STRINGS, pickLocale: pickLocale,
     ACCOUNT: ACCOUNT, accountStrings: accountStrings };
 })(typeof self !== 'undefined' ? self : this);

@@ -24,6 +24,31 @@ window.BSUI = (function (root) {
   var prevPhase = null;
 
   function $(id) { return document.getElementById(id); }
+  // Localized strings (js/i18n.js); content keeps its English data and is looked up by id.
+  function t(key, vars, fallback) { return root.BSI18n ? root.BSI18n.t(key, vars, fallback) : (fallback != null ? fallback : key); }
+  function stageName(cfg) {
+    if (!cfg) return '';
+    if (cfg.kind === 'journey') return t('j.' + cfg.id, null, cfg.name);
+    if (cfg.kind === 'challenge') return t('ch.' + cfg.id, null, cfg.name);
+    if (cfg.kind === 'practice') return t('pr.' + cfg.id, null, cfg.name);
+    if (cfg.kind === 'score') return t('score.name', null, cfg.name);
+    if (cfg.kind === 'daily') return t('daily.name', { date: cfg.date }, cfg.name);
+    return cfg.name || '';
+  }
+  function stageIntro(cfg) {
+    if (!cfg || !cfg.intro) return '';
+    if (cfg.kind === 'journey') return t('ji.' + cfg.id, null, cfg.intro);
+    if (cfg.kind === 'challenge') return t('chi.' + cfg.id, null, cfg.intro);
+    if (cfg.kind === 'score') return t('score.intro', null, cfg.intro);
+    if (cfg.kind === 'daily') return t('daily.intro', null, cfg.intro);
+    return cfg.intro;
+  }
+  function lessonTitle(l) { return l ? t('lt.' + l.id, null, l.title) : ''; }
+  function lessonText(l) { return l ? t('lx.' + l.id, null, l.text) : ''; }
+  function achievementName(key) {
+    var def = Content.ACHIEVEMENTS.find(function (a) { return a.key === key; });
+    return def ? t('ach.' + key, null, def.name) : key;
+  }
 
   function init(deps) {
     S = deps.session; R = deps.render; A = deps.audio; P = deps.platform;
@@ -55,20 +80,51 @@ window.BSUI = (function (root) {
     S.on('state', onState);
     S.on('countdown', onCountdown);
     S.on('results', onResults);
-    S.on('invalid', function (reason) { announce('Not allowed: ' + reason); A.event('ack'); });
+    S.on('invalid', function (reason) { announce(t('invalid', { reason: t('reason.' + reason, null, reason) })); A.event('ack'); });
     S.on('lesson-done', function (lesson) {
-      toast('Lesson complete: ' + lesson.title);
-      announce('Lesson complete. ' + lesson.title);
+      toast(t('toast.lesson', { name: lessonTitle(lesson) }));
+      announce(t('an.lesson', { name: lessonTitle(lesson) }));
       A.event('lesson');
       S.progress.tutorialDone = true;
       S.saveProgress();
     });
     S.on('achievement', function (key) {
       var def = Content.ACHIEVEMENTS.find(function (a) { return a.key === key; });
-      if (def) { toast('Achievement: ' + def.name); A.event('achievement', def.name); }
+      if (def) { toast(t('toast.achievement', { name: achievementName(key) })); A.event('achievement', achievementName(key)); }
     });
     A.onCaption(showCaption);
+    document.addEventListener('bs-language', onLanguage);
+    setBindings(bindings);
   }
+
+  // Language changed (Settings → Language, or the account preference arrived):
+  // i18n.js has re-applied the static markup; re-render text built here for
+  // whatever is on screen. The round, its clock and the renderer are untouched.
+  var lastResults = null, lastBoard = null, lastLb = null;
+  function onLanguage() {
+    refreshModeCards();
+    refreshTitleMeta();
+    refreshAccount();
+    renderNetLine();
+    if (currentScreen === 'setup' && setupListMode) fillSetup(setupListMode);
+    if (currentScreen === 'help') fillHelp();
+    if (currentScreen === 'board' && lastBoard) lastBoard();
+    if (lastResults) renderResults(lastResults);
+    if (S.round) { showHudLabels(S.round); mirrorBoard(S.round.state); }
+    if (root.BSGraphicsPanel && root.BSGraphicsPanel.relabel) root.BSGraphicsPanel.relabel();
+    setBindings(bindings); // tray key hints (Space is localized)
+  }
+
+  // Title status line: "Playing as … · synced" when signed in, local-play note otherwise.
+  var netState = { name: null, signedOut: false };
+  function renderNetLine() {
+    var net = el.titleNet, T = accountStrings();
+    if (!net || !T) return;
+    if (netState.signedOut) net.textContent = T.signedOut;
+    else if (netState.name && P.tokenHosted) net.textContent = T.playingAs.replace('{name}', netState.name) + ' · ' + T.synced;
+    else if (netState.local) net.textContent = t('net.local');
+  }
+  function setNet(patch) { Object.assign(netState, patch); renderNetLine(); }
 
   // ---------- screens ----------
   var SCREENS = ['title', 'mode-select', 'setup', 'paused', 'results', 'settings', 'help', 'board'];
@@ -117,7 +173,8 @@ window.BSUI = (function (root) {
   function announceAssertive(msg) { el.liveAssertive.textContent = ''; el.liveAssertive.textContent = msg; }
   function showCaption(text) {
     if (!S.settings.captions || !text) return;
-    el.caption.textContent = text;
+    var m = /^achievement: (.*)$/.exec(text);
+    el.caption.textContent = m ? t('cap.achievement', { name: m[1] }) : t('cap.' + text, null, text);
     el.caption.hidden = false;
     clearTimeout(showCaption._t);
     showCaption._t = setTimeout(function () { el.caption.hidden = true; }, 1800);
@@ -132,21 +189,27 @@ window.BSUI = (function (root) {
     $('btn-help').addEventListener('click', function () { openHelp(); });
     $('btn-boards').addEventListener('click', function () {
       var today = Content.utcDateString(P.hosted ? P.now() : Date.now());
-      openBoard('Score chase — this device', P.scoreBoard(), function (r) { return r.score; });
+      openBoards(today);
+    });
+    $('btn-settings').addEventListener('click', function () { showScreen('settings'); });
+    bindRest();
+  }
+  function openBoards(today) {
+      lastBoard = function () { openBoards(today); };
+      openBoard(t('board.score'), P.scoreBoard(), function (r) { return r.score; });
       // daily board appended after global rows load
       P.dailyBoard(today).then(function (r) {
         if (!r.rows.length) return;
         var h = document.createElement('h3');
-        h.textContent = 'Daily ' + today;
+        h.textContent = t('board.daily', { date: today });
         var ol = document.createElement('ol');
         r.rows.slice(0, 20).forEach(function (row) {
           appendBoardRow(ol, row, String(row.score));
         });
         el.boardBody.appendChild(h); el.boardBody.appendChild(ol);
       });
-    });
-    $('btn-settings').addEventListener('click', function () { showScreen('settings'); });
-
+  }
+  function bindRest() {
     document.querySelectorAll('#mode-cards .card').forEach(function (card) {
       card.addEventListener('click', function () { openSetup(card.dataset.mode); });
     });
@@ -195,77 +258,83 @@ window.BSUI = (function (root) {
   function refreshModeCards() {
     var p = S.progress;
     var journeyDone = Object.keys(p.journeyStars).filter(function (k) { return p.journeyStars[k] > 0; }).length;
-    el.journeyStatus.textContent = journeyDone + '/40 stages · ' + p.stars + ' stars';
+    el.journeyStatus.textContent = t('status.journey', { done: journeyDone, stars: p.stars });
     var today = Content.utcDateString(P.hosted ? P.now() : Date.now());
-    el.dailyStatus.textContent = p.dailies[today] ? 'Best today: ' + p.dailies[today] : 'Not played today';
-    el.learnStatus.textContent = p.tutorialDone ? 'Completed' : '5 lessons';
-    el.scoreStatus.textContent = p.bestScore ? 'Best: ' + p.bestScore : '';
+    el.dailyStatus.textContent = p.dailies[today] ? t('status.dailyBest', { n: p.dailies[today] }) : t('status.dailyNone');
+    el.learnStatus.textContent = p.tutorialDone ? t('status.learnDone') : t('status.learn');
+    el.scoreStatus.textContent = p.bestScore ? t('status.best', { n: p.bestScore }) : '';
   }
 
   function refreshTitleMeta() {
     var p = S.progress;
     el.titleProgress.textContent =
       p.stars > 0 || p.bestScore > 0
-        ? 'Journey ' + Object.keys(p.journeyStars).filter(function (k) { return p.journeyStars[k] > 0; }).length +
-          '/40 · ' + p.stars + '★ · best score ' + p.bestScore
+        ? t('title.progress', { done: Object.keys(p.journeyStars).filter(function (k) { return p.journeyStars[k] > 0; }).length,
+          stars: p.stars, best: p.bestScore })
         : '';
   }
 
   function openSetup(mode) {
-    pendingSetup = null;
     setupListMode = mode;
+    fillSetup(mode, true);
+    showScreen('setup');
+  }
+
+  // Fill the setup screen for a mode; `fresh` also picks the starting page.
+  function fillSetup(mode, fresh) {
+    pendingSetup = null;
     var info = '', list = [];
     if (mode === 'journey') {
-      el.setupH.textContent = 'Journey';
-      info = 'Ranked: no · Expected: 1–3 min per stage · 1 player · Assists: undo + hints allowed. Finish stages to earn up to 3 stars each.';
+      el.setupH.textContent = t('journey');
+      info = t('setup.journey');
       list = Content.JOURNEY.map(function (cfg, i) {
         var unlocked = i === 0 || (S.progress.journeyStars[Content.JOURNEY[i - 1].id] || 0) > 0;
         var stars = S.progress.journeyStars[cfg.id] || 0;
-        return { cfg: cfg, unlocked: unlocked, label: (i + 1) + '. ' + cfg.name,
+        return { cfg: cfg, unlocked: unlocked, label: (i + 1) + '. ' + stageName(cfg),
           right: '★'.repeat(stars) + '☆'.repeat(3 - stars), current: unlocked && !stars };
       });
     } else if (mode === 'daily') {
-      el.setupH.textContent = 'Daily challenge';
+      el.setupH.textContent = t('daily');
       var date = Content.utcDateString(P.hosted ? P.now() : Date.now());
       var cfg = Content.dailyConfig(date);
       pendingSetup = { mode: 'daily', cfg: cfg };
-      info = 'Ranked: YES · Seed ' + cfg.seed + ' · Goal ' + cfg.goalHeight + ' slabs' +
-        (cfg.dropLimit ? ' · ' + cfg.dropLimit + ' drops max' : '') +
-        (cfg.timeLimitSec ? ' · ' + cfg.timeLimitSec + 's clock' : '') +
-        ' · No undo. One shared seed for everyone on ' + date + ' (UTC).';
+      info = t('setup.daily', { seed: cfg.seed, goal: cfg.goalHeight, date: date,
+        drops: cfg.dropLimit ? t('setup.dailyDrops', { n: cfg.dropLimit }) : '',
+        clock: cfg.timeLimitSec ? t('setup.dailyClock', { n: cfg.timeLimitSec }) : '' });
     } else if (mode === 'practice') {
-      el.setupH.textContent = 'Practice';
-      info = 'Ranked: no · Assists: undo + hints · No effect on rating.';
+      el.setupH.textContent = t('mode.practice');
+      info = t('setup.practice');
       list = Content.PRACTICE.map(function (cfg) {
-        return { cfg: cfg, unlocked: true, label: cfg.name,
-          right: cfg.endless ? 'endless' : 'goal ' + cfg.goalHeight };
+        return { cfg: cfg, unlocked: true, label: stageName(cfg),
+          right: cfg.endless ? t('setup.endless') : t('setup.goal', { n: cfg.goalHeight }) };
       });
     } else if (mode === 'challenge') {
-      el.setupH.textContent = 'Challenge';
-      info = 'Ranked: no · Constrained goals · Assists vary per challenge.';
+      el.setupH.textContent = t('mode.challenge');
+      info = t('setup.challenge');
       list = Content.CHALLENGES.map(function (cfg) {
-        return { cfg: cfg, unlocked: true, label: cfg.name,
-          right: (cfg.dropLimit ? cfg.dropLimit + ' drops ' : '') + (cfg.timeLimitSec ? cfg.timeLimitSec + 's' : '') };
+        return { cfg: cfg, unlocked: true, label: stageName(cfg),
+          right: (cfg.dropLimit ? t('setup.drops', { n: cfg.dropLimit }) + ' ' : '') + (cfg.timeLimitSec ? t('setup.secs', { n: cfg.timeLimitSec }) : '') };
       });
     } else if (mode === 'score') {
-      el.setupH.textContent = 'Score chase';
+      el.setupH.textContent = t('mode.score');
       var sc = Content.SCORE_CHASE;
       pendingSetup = { mode: 'score', cfg: sc };
-      info = 'Ranked: YES · Endless — one life, rising speed · No undo, no hints. Submit to global and friends boards.';
+      info = t('setup.score');
     } else if (mode === 'learn') {
-      el.setupH.textContent = 'Learn';
-      info = 'Five interactive lessons. Each introduces one rule and asks you to perform it.';
+      el.setupH.textContent = t('learn');
+      info = t('setup.learn');
       list = Content.tutorialLessons().map(function (lesson) {
-        return { cfg: lesson.cfg, lesson: lesson, unlocked: true, label: lesson.title, right: '' };
+        return { cfg: lesson.cfg, lesson: lesson, unlocked: true, label: lessonTitle(lesson), right: '' };
       });
     }
     el.setupInfo.textContent = info;
     setupItems = list;
-    var currentIdx = list.findIndex(function (item) { return item.current; });
-    setupPage = currentIdx > 0 ? Math.floor(currentIdx / SETUP_PAGE_SIZE) : 0;
+    if (fresh) {
+      var currentIdx = list.findIndex(function (item) { return item.current; });
+      setupPage = currentIdx > 0 ? Math.floor(currentIdx / SETUP_PAGE_SIZE) : 0;
+    }
     renderSetupList();
     el.btnStart.hidden = !pendingSetup;
-    showScreen('setup');
   }
 
   function renderSetupList() {
@@ -301,9 +370,10 @@ window.BSUI = (function (root) {
     S.startCountdown();
     showScreen(null);
     showHud(round);
-    if (setup.mode === 'learn' || setup.cfg.intro) announceAssertive(setup.lesson ? setup.lesson.text : setup.cfg.intro);
-    if (setup.lesson) toast(setup.lesson.title + ' — ' + setup.lesson.text);
-    else if (setup.cfg.intro) toast(setup.cfg.intro);
+    lastResults = null;
+    if (setup.mode === 'learn' || setup.cfg.intro) announceAssertive(setup.lesson ? lessonText(setup.lesson) : stageIntro(setup.cfg));
+    if (setup.lesson) toast(lessonTitle(setup.lesson) + ' — ' + lessonText(setup.lesson));
+    else if (setup.cfg.intro) toast(stageIntro(setup.cfg));
   }
 
   function themeFor(cfg) {
@@ -323,15 +393,19 @@ window.BSUI = (function (root) {
     el.hud.hidden = false;
     el.tray.hidden = false;
     var cfg = round.cfg;
-    el.hudObjective.textContent = cfg.endless ? 'Build as high as you can'
-      : 'Reach ' + cfg.goalHeight + ' slabs';
-    el.hudProgress.textContent = round.lesson ? round.lesson.title : cfg.name || '';
+    showHudLabels(round);
     el.hudDropsWrap.hidden = !cfg.dropLimit;
     el.hudTimeWrap.hidden = !cfg.timeLimitSec;
     el.hudLivesWrap.hidden = cfg.lives <= 1;
     $('btn-hint').disabled = !cfg.mechanics.hint;
     $('btn-undo').disabled = !cfg.mechanics.undo || S.isRanked();
     updateHud(round.state);
+  }
+
+  function showHudLabels(round) {
+    var cfg = round.cfg;
+    el.hudObjective.textContent = cfg.endless ? t('hud.endless') : t('hud.goal', { n: cfg.goalHeight });
+    el.hudProgress.textContent = round.lesson ? lessonTitle(round.lesson) : stageName(cfg);
   }
 
   function updateHud(state) {
@@ -350,7 +424,7 @@ window.BSUI = (function (root) {
     if (phase === 'active') {
       el.countdown.hidden = true;
       A.event('go');
-      announce('Go. Drop the slab when it lines up.');
+      announce(t('an.go'));
       $('btn-drop').focus({ preventScroll: true });
     } else if (phase === 'countdown') {
       el.countdown.hidden = false;
@@ -359,7 +433,7 @@ window.BSUI = (function (root) {
   }
 
   function onCountdown(left) {
-    el.countdownNum.textContent = left > 0 ? left : 'Go';
+    el.countdownNum.textContent = left > 0 ? left : t('count.go');
     A.event('count', left);
   }
 
@@ -372,15 +446,15 @@ window.BSUI = (function (root) {
       if (e.type === 'place') {
         A.event(e.perfect ? 'perfect' : 'place');
         if (navigator.vibrate && S.settings.haptics) navigator.vibrate(e.perfect ? 30 : 12);
-        announce(e.perfect ? 'Perfect! Streak ' + state.streak : 'Placed. Height ' + Rules.height(state));
+        announce(e.perfect ? t('an.perfect', { n: state.streak }) : t('an.placed', { n: Rules.height(state) }));
       } else if (e.type === 'trim') {
         A.event('trim');
       } else if (e.type === 'miss') {
         A.event('miss');
-        announceAssertive('Missed!' + (e.livesLeft > 0 ? ' ' + e.livesLeft + ' spare slab left.' : ''));
+        announceAssertive(t('an.missed') + (e.livesLeft > 0 ? t('an.spare', { n: e.livesLeft }) : ''));
         if (navigator.vibrate && S.settings.haptics) navigator.vibrate([60, 40, 60]);
       } else if (e.type === 'undo') {
-        announce('Drop undone.');
+        announce(t('an.undone'));
       }
     });
     mirrorBoard(state);
@@ -389,28 +463,26 @@ window.BSUI = (function (root) {
   // Concise navigable model of the board for screen readers.
   function mirrorBoard(state) {
     var top = Rules.topSlab(state);
-    el.boardMirror.textContent =
-      'Tower height ' + Rules.height(state) + ' of ' + (state.cfg.goalHeight || 'unlimited') +
-      '. Next slab slides on the ' + state.pending.axis.toUpperCase() + ' axis' +
-      ', width ' + (Math.max(top.w, top.d) / 1000).toFixed(1) + ' units.' +
-      ' Score ' + state.score.total + '.';
+    el.boardMirror.textContent = t('mirror', { h: Rules.height(state), goal: state.cfg.goalHeight || t('mirror.unlimited'),
+      axis: state.pending.axis.toUpperCase(), w: (Math.max(top.w, top.d) / 1000).toFixed(1), score: state.score.total });
   }
 
   // ---------- results ----------
-  function onResults(res) {
+  // Text of the results screen; re-run on a language change without re-posting.
+  function renderResults(res) {
     var s = res.state;
-    el.resultsH.textContent = res.won ? 'Stage complete!' : 'Round over';
+    el.resultsH.textContent = res.won ? t('results.won') : t('results.over');
     el.resultsHeadline.textContent =
-      (res.won ? 'The spire stands. ' : 'The spire fell — ' + terminalText(s.terminal.reason) + '. ') +
-      'Height ' + Rules.height(s) + (s.cfg.goalHeight ? ' / ' + s.cfg.goalHeight : '') +
+      (res.won ? t('res.stands') : t('res.fell', { why: terminalText(s.terminal.reason) })) +
+      t('res.height', { h: Rules.height(s) + (s.cfg.goalHeight ? ' / ' + s.cfg.goalHeight : '') }) +
       (res.stars ? ' · ' + '★'.repeat(res.stars) : '');
     var rows = [
-      ['Height (' + s.placed + ' slabs)', s.score.heightPoints],
-      ['Perfect placements (' + s.perfects + ')', s.score.perfectPoints],
-      ['Streak bonus (best ' + s.bestStreak + ')', s.score.streakPoints],
-      ['Goal bonus', s.score.goalBonus],
-      ['Under-par drops', s.score.dropBonus],
-      ['Under-par time', s.score.timeBonus]
+      [t('row.height', { n: s.placed }), s.score.heightPoints],
+      [t('row.perfect', { n: s.perfects }), s.score.perfectPoints],
+      [t('row.streak', { n: s.bestStreak }), s.score.streakPoints],
+      [t('row.goal'), s.score.goalBonus],
+      [t('row.drops'), s.score.dropBonus],
+      [t('row.time'), s.score.timeBonus]
     ];
     var tbody = el.scoreTable.querySelector('tbody');
     tbody.innerHTML = '';
@@ -423,25 +495,32 @@ window.BSUI = (function (root) {
     el.scoreTotal.textContent = s.score.total;
     el.resultsAchievements.innerHTML = '';
     res.achievements.forEach(function (key) {
-      var def = Content.ACHIEVEMENTS.find(function (a) { return a.key === key; });
       var li = document.createElement('li');
-      li.textContent = def ? def.name : key;
+      li.textContent = achievementName(key);
       el.resultsAchievements.appendChild(li);
     });
+    el.resultsProgress.textContent = t('res.progress', { stars: S.progress.stars, best: S.progress.bestScore });
+    el.resultsBoard.textContent = res.localRank ? t('res.local', res.localRank) : '';
+    if (lastLb) showLbLine(lastLb);
+  }
+
+  function onResults(res) {
+    var s = res.state;
+    lastResults = res; lastLb = null; res.localRank = null;
+    renderResults(res);
     var next = nextJourneyLevel();
     el.btnNext.hidden = !(res.won && next);
-    el.resultsProgress.textContent = 'Journey stars: ' + S.progress.stars + ' · best score ' + S.progress.bestScore;
     refreshTitleMeta();
     A.event(res.won ? 'win' : 'lose');
-    announceAssertive(el.resultsHeadline.textContent + ' Total score ' + s.score.total);
+    announceAssertive(el.resultsHeadline.textContent + t('an.total', { n: s.score.total }));
     showScreen('results');
     if (S.isRanked()) {
       var submit = S.round.mode === 'daily'
         ? P.submitDaily(s.cfg.date, envelopePayload(res.replay))
         : P.submitScore(envelopePayload(res.replay));
       submit.then(function (r) {
-        el.resultsBoard.textContent = r.rank != null
-          ? 'Local board: rank #' + r.rank + ' of ' + r.total + '.' : '';
+        res.localRank = r.rank != null ? { rank: r.rank, total: r.total } : null;
+        if (lastResults === res) el.resultsBoard.textContent = res.localRank ? t('res.local', res.localRank) : '';
       });
     } else {
       el.resultsBoard.textContent = '';
@@ -454,13 +533,21 @@ window.BSUI = (function (root) {
     var line = $('results-lb');
     if (!line) return;
     if (total == null || !P.tokenHosted) { line.hidden = true; line.textContent = ''; return; }
-    var T = accountStrings();
     line.hidden = false;
-    line.textContent = T.lbPosting;
+    lastLb = { pending: true };
+    showLbLine(lastLb);
+    var mine = lastLb;
     P.postLeaderboard(total).then(function (r) {
-      line.textContent = !r.posted ? T.lbNotPosted
-        : r.rank ? T.lbRank.replace('{rank}', r.rank) : T.lbPosted;
+      if (lastLb !== mine) return;
+      lastLb = r;
+      showLbLine(r);
     });
+  }
+  function showLbLine(r) {
+    var line = $('results-lb'), T = accountStrings();
+    if (!line || !T) return;
+    line.textContent = r.pending ? T.lbPosting : !r.posted ? T.lbNotPosted
+      : r.rank ? T.lbRank.replace('{rank}', r.rank) : T.lbPosted;
   }
 
   function envelopePayload(env) {
@@ -473,10 +560,7 @@ window.BSUI = (function (root) {
     };
   }
 
-  function terminalText(reason) {
-    return { 'missed': 'a slab sailed past', 'move-limit': 'out of drops',
-      'time-up': 'the clock ran out', 'resigned': 'you left the round' }[reason] || reason;
-  }
+  function terminalText(reason) { return t('why.' + reason, null, reason); }
 
   // ---------- input ----------
   var holdTimer = null;
@@ -501,7 +585,7 @@ window.BSUI = (function (root) {
       A.event('hint');
       hintFlashUntil = performance.now() + 1600;
       updateAssist();
-      announce('Perfect window marked on the playfield.');
+      announce(t('an.hint'));
     }
   }
 
@@ -571,7 +655,7 @@ window.BSUI = (function (root) {
           break;
         case 'camera':
           // camera reset: snap framing to tower top
-          if (round) { R.syncState(round.state, 0); announce('Camera refocused on the tower.'); }
+          if (round) { R.syncState(round.state, 0); announce(t('an.camera')); }
           break;
       }
     });
@@ -602,15 +686,19 @@ window.BSUI = (function (root) {
 
   // ---------- help ----------
   function openHelp() {
+    fillHelp();
+    showScreen('help');
+  }
+  function fillHelp() {
     el.helpCards.innerHTML = '';
     var cards = [
-      ['Drop', 'The slab slides side to side. Tap the playfield, click, press Space, Enter, or gamepad A to drop it.'],
-      ['Trim', 'Any overhang is shaved off — the tower keeps only the overlap, and the next slab travels the other axis.'],
-      ['Perfect', 'Drop dead center (within the glowing margin) to keep full width, earn bonus points, and grow a streak.'],
-      ['Hints & undo', 'Where allowed, press H to mark the perfect window and U to take back a drop. Ranked modes disable both.'],
-      ['Limits', 'Some stages limit drops or time. Misses spend drops too. The clock only runs while you play.'],
-      ['Keyboard', keysOf('drop') + ' drop · ' + keysOf('pause') + ' pause · ' + keysOf('undo') + ' undo · ' +
-        keysOf('hint') + ' hint · ' + keysOf('camera') + ' camera · ' + keysOf('back') + ' back. Full game is keyboard-operable.']
+      [t('help.drop'), t('help.dropText')],
+      [t('help.trim'), t('help.trimText')],
+      [t('help.perfect'), t('help.perfectText')],
+      [t('help.assists'), t('help.assistsText')],
+      [t('help.limits'), t('help.limitsText')],
+      [t('help.keyboard'), t('help.keyboardText', { drop: keysOf('drop'), pause: keysOf('pause'), undo: keysOf('undo'),
+        hint: keysOf('hint'), camera: keysOf('camera'), back: keysOf('back') })]
     ];
     cards.forEach(function (c) {
       var div = document.createElement('div');
@@ -620,7 +708,6 @@ window.BSUI = (function (root) {
       div.appendChild(s); div.appendChild(p);
       el.helpCards.appendChild(div);
     });
-    showScreen('help');
   }
 
   // ---------- boards ----------
@@ -630,24 +717,25 @@ window.BSUI = (function (root) {
   function boardRowLabel(row) {
     if (row.name) return Promise.resolve(row.name);
     var pid = row.playerId;
-    if (!pid) return Promise.resolve('player');
+    if (!pid) return Promise.resolve(t('board.player'));
     return P.profileFor(pid).then(function (name) {
-      return pid === P.playerId ? 'You (' + name + ')' : name;
+      if (/^Player [0-9a-z-]{1,8}$/i.test(name)) name = t('board.playerId', { id: pid.slice(0, 8) });
+      return pid === P.playerId ? t('board.you', { name: name }) : name;
     });
   }
   function appendBoardRow(ol, row, scoreText) {
     var li = document.createElement('li');
-    li.textContent = (row.name || row.playerId || 'player') + ' ';
+    li.textContent = (row.name || row.playerId || t('board.player')) + ' ';
     boardRowLabel(row).then(function (label) { li.textContent = label + ' '; });
     var b = document.createElement('strong'); b.textContent = scoreText;
     li.appendChild(b); ol.appendChild(li);
   }
   function openBoard(title, promise, scoreOf) {
     el.boardH.textContent = title;
-    el.boardBody.textContent = 'Loading…';
-    showScreen('board');
+    el.boardBody.textContent = t('board.loading');
+    if (currentScreen !== 'board') showScreen('board');
     promise.then(function (r) {
-      if (!r.rows.length) { el.boardBody.textContent = 'No scores yet — be the first.'; return; }
+      if (!r.rows.length) { el.boardBody.textContent = t('board.empty'); return; }
       var ol = document.createElement('ol');
       r.rows.forEach(function (row) {
         appendBoardRow(ol, row, ' ' + scoreOf(row));
@@ -668,7 +756,7 @@ window.BSUI = (function (root) {
     return null;
   }
   function keyName(code) {
-    var named = { Space: 'Space', Escape: 'Esc', NumpadEnter: 'Num Enter', ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓' };
+    var named = { Space: t('key.Space'), Escape: 'Esc', NumpadEnter: 'Num Enter', ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓' };
     return named[code] || String(code).replace(/^Key/, '').replace(/^Digit/, '');
   }
   function keysOf(action) { return (bindings[action] || []).map(keyName).join('/'); }
@@ -755,6 +843,7 @@ window.BSUI = (function (root) {
     pauseGame: pauseGame,
     resumeGame: resumeGame,
     showHud: showHud,
+    setNet: setNet,
     updateHud: updateHud,
     refreshTitleMeta: refreshTitleMeta,
     openBoard: openBoard,

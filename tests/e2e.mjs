@@ -26,6 +26,7 @@ import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { stubStarHermit, launchToken } from './starhermit-e2e.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const browserNoise = /GL Driver Message|GPU stall due to ReadPixels|Automatic fallback to software WebGL|EnableWebGLDeveloperExtensions/i;
@@ -44,7 +45,9 @@ const server = http.createServer(async (req, res) => {
     if (p === '/') p = '/index.html';
     // Plain static host: standalone play must never call own-server routes.
     if (p.startsWith('/api') || p.startsWith('/ws')) {
-      ownServerHits.push(p);
+      // Signed-in (stubbed) sessions send a bearer token; their unload-time
+      // keepalive save can bypass page.route. Only token-less calls count.
+      if (!req.headers.authorization) ownServerHits.push(p);
       res.writeHead(404); res.end();
       return;
     }
@@ -340,6 +343,61 @@ async function runPass(passName, contextOpts) {
       });
     }
 
+    await step('Language: Automatic follows the StarHermit preferred language; Settings → Language re-renders a paused round live and saves ui.language; report a problem', async () => {
+      const calls = await stubStarHermit(page, { preferredLanguage: 'fr-CA' });
+      await page.goto('about:blank');
+      await page.goto(BASE + '/index.html#game_token=' + launchToken(), { waitUntil: 'load' });
+      await page.waitForFunction(() => document.documentElement.lang === 'fr-CA');
+      await page.waitForSelector('#screen-title:not([hidden])');
+      if ((await page.textContent('#btn-play')).trim() !== 'Jouer') throw new Error('title not in fr-CA');
+      const tap = (sel) => (contextOpts.hasTouch ? page.tap(sel) : page.click(sel));
+      await tap('#btn-play');
+      await tap('#mode-cards [data-mode="practice"]');
+      await tap('#setup-list button:not([disabled])');
+      await waitActive();
+      await dropAtPerfect();
+      await page.waitForTimeout(150);
+      const before = await roundStatus();
+      await tap('#btn-pause');
+      await page.waitForSelector('#screen-pause:not([hidden])');
+      await tap('#btn-pause-settings');
+      await page.waitForSelector('#screen-settings:not([hidden])');
+      const choice = page.locator('#gfx-settings [data-game-language="choice"]');
+      await choice.scrollIntoViewIfNeeded();
+      const autoLabel = await choice.locator('option').first().textContent();
+      if (!/^Automatique — Français \(Canada\)$/.test(autoLabel)) throw new Error('Automatic label not resolved: ' + autoLabel);
+      await choice.selectOption('it-IT');
+      await page.waitForFunction(() => document.documentElement.lang === 'it-IT');
+      await page.waitForFunction(() => /Salvato/.test(document.querySelector('[data-game-language="status"]').textContent));
+      if (calls.settings['ui.language']?.choice !== 'it-IT') throw new Error('ui.language not saved: ' + JSON.stringify(calls.settings));
+      if ((await page.textContent('#settings-h')) !== 'Impostazioni') throw new Error('settings heading not re-rendered');
+      if ((await page.textContent('#gfx-settings legend')) !== 'Grafica') throw new Error('Graphics legend not re-rendered');
+      await page.locator('[data-game-report="title"]').scrollIntoViewIfNeeded();
+      await page.fill('[data-game-report="title"]', 'Test report');
+      await tap('[data-game-report="send"]');
+      await page.waitForFunction(() => /Grazie/.test(document.querySelector('[data-game-report="status"]').textContent));
+      if (!calls.reports?.[0] || calls.reports[0].kind !== 'bug') throw new Error('report not posted');
+      await page.screenshot({ path: SHOT('language', passName) });
+      await tap('#screen-settings [data-back]');
+      await page.waitForSelector('#screen-pause:not([hidden])');
+      if ((await page.textContent('#pause-h')) !== 'In pausa') throw new Error('pause screen not re-rendered');
+      if (!/^Raggiungi \d+ lastre$/.test(await page.textContent('#hud-objective'))) throw new Error('HUD not re-rendered: ' + await page.textContent('#hud-objective'));
+      await tap('#btn-resume');
+      await waitActive();
+      const after = await roundStatus();
+      if (after.height !== before.height || after.done) throw new Error('round was not kept across the language change');
+      await tap('#btn-pause');
+      await page.waitForSelector('#screen-pause:not([hidden])');
+      await tap('#btn-pause-settings');
+      await page.locator('#gfx-settings [data-game-language="choice"]').selectOption('auto');
+      await page.waitForFunction(() => document.documentElement.lang === 'fr-CA');
+      await tap('#screen-settings [data-back]');
+      await tap('#btn-leave');
+      await page.waitForSelector('#screen-results:not([hidden])', { timeout: 8000 });
+      if ((await page.textContent('#results-h')) !== 'Manche terminée') throw new Error('results not in fr-CA');
+      // the stub stays routed until the context closes (debounced cloud saves still fire)
+    });
+
     if (ownServerHits.length) errors.push('own-server requests while standalone: ' + ownServerHits.join(', '));
     const bad = errors.slice();
     if (bad.length) throw new Error(`page errors in ${passName} pass:\n` + bad.join('\n'));
@@ -350,10 +408,10 @@ async function runPass(passName, contextOpts) {
 }
 
 try {
-  await runPass('desktop', { viewport: { width: 1280, height: 800 } });
+  await runPass('desktop', { viewport: { width: 1280, height: 800 }, locale: 'en-US' });
   await runPass('mobile', USE_FIREFOX
-    ? { viewport: { width: 390, height: 844 }, hasTouch: true }
-    : { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+    ? { viewport: { width: 390, height: 844 }, hasTouch: true, locale: 'en-US' }
+    : { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, locale: 'en-US' });
   console.log('\nE2E PASS — both viewport passes clean');
 } catch (e) {
   failures++;

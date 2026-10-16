@@ -26,7 +26,7 @@
     if (!render) {
       document.getElementById('gl-fallback').hidden = false;
       document.getElementById('live-assertive').textContent =
-        '3D graphics are unavailable in this browser.';
+        window.BSI18n ? BSI18n.t('gl.live') : '3D graphics are unavailable in this browser.';
     } else {
       // Graphics preset/overrides (js/gfx.js); Auto picks a preset from the GPU.
       render.setGraphics(BSSession.settings.graphics || {});
@@ -42,12 +42,18 @@
     var cloudReady = false, settingsReady = false;
     BSSession.on('progress', function (p) { if (cloudReady) BSPlatform.saveCloud({ v: 1, progress: p }); });
     BSSession.on('settings', function (st) { if (settingsReady) BSPlatform.mirrorSettings(st); });
+    // Another device saved first: merge its progress with ours and save the merge.
+    BSPlatform.onSaveConflict(function (remote) {
+      var merged = BSSession.mergeProgress(remote && remote.progress, BSSession.progress);
+      BSSession.adoptProgress(merged);
+      BSUI.refreshTitleMeta();
+      BSPlatform.saveCloud({ v: 1, progress: BSSession.progress });
+    });
     BSPlatform.onAuth(function (a) {
       BSUI.refreshAccount();
       if (!a.signedIn) {
         cloudReady = settingsReady = false;
-        var T = window.BSGraphicsPanel && window.BSGraphicsPanel.accountStrings();
-        if (T) document.getElementById('title-net').textContent = T.signedOut;
+        BSUI.setNet({ signedOut: true });
       }
     });
     if (BSPlatform.tokenHosted) {
@@ -74,18 +80,16 @@
 
     // Signed in: server time + nickname. Standalone: local clock, no request.
     BSPlatform.syncTime().then(function () {
-      var net = document.getElementById('title-net');
-      net.textContent = 'Local play — boards are kept on this device.';
-      var T = window.BSGraphicsPanel && window.BSGraphicsPanel.accountStrings();
-      if (T) BSPlatform.displayName().then(function (name) {
-        if (name && BSPlatform.tokenHosted) net.textContent = T.playingAs.replace('{name}', name) + ' · ' + T.synced;
+      BSUI.setNet({ local: true });
+      BSPlatform.displayName().then(function (name) {
+        if (name && BSPlatform.tokenHosted) BSUI.setNet({ name: name });
       });
     });
 
     // Resume an interrupted round (last safe local snapshot).
     var resumed = BSSession.loadSnapshot();
     if (resumed) {
-      BSUI.toast('Round restored — paused. Press P or Resume to continue.');
+      BSUI.toast(window.BSI18n ? BSI18n.t('toast.restored') : 'Round restored — paused. Press P or Resume to continue.');
       BSSession.pause();
       BSUI.showScreen('paused');
       BSUI.showHud(resumed);
