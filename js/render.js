@@ -17,6 +17,15 @@ import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
+// EffectComposer resizes every pass to the full frame (addPass / setSize); this keeps a pass at a
+// fraction of it (used for the preset budget's bloom resolution).
+function atScale(pass, k) {
+  const setSize = pass.setSize.bind(pass);
+  pass.setSize = (w, h) => setSize(Math.max(1, Math.round(w * k)), Math.max(1, Math.round(h * k)));
+  return pass;
+}
+
+
 const Gfx = window.BSGfx;
 const MU = 1000;
 const SLAB_H = 0.42;           // world units per slab level
@@ -645,7 +654,7 @@ function buildPost(w, h) {
     if (q.bloom === 'on') {
       // High threshold: only the emissive moving slab, perfect glows and the rim inlay bloom.
       const br = q.budget.bloomRes; // bloom at the budget's fraction of the canvas resolution
-      c.addPass(new UnrealBloomPass(new THREE.Vector2(Math.round(pw * br), Math.round(ph * br)), 0.32, 0.4, 0.92));
+      c.addPass(atScale(new UnrealBloomPass(new THREE.Vector2(Math.round(pw * br), Math.round(ph * br)), 0.32, 0.4, 0.92), br));
     }
     c.addPass(new OutputPass());
     if (q.grade === 'on') {
