@@ -44,7 +44,7 @@ let shadowLevel = -1;
 
 // Graphics state (see setGraphics / graphicsInfo).
 let q = Gfx.resolve({}, 'balanced');
-let gpu = '', detected = 'balanced';
+let gpu = '', detected = 'balanced', gpuLevel = 0;
 let composer = null, gradePass = null, postKey = null, postFailed = false;
 let pixelRatio = 1, sizeW = 0, sizeH = 0;
 let adaptiveScale = 1, frameTimes = [], fps = 0;
@@ -52,7 +52,7 @@ let envTex = null, pmrem = null;
 let time = 0;
 
 const slabGeo = new THREE.BoxGeometry(1, SLAB_H, 1);
-const roundGeo = new RoundedBoxGeometry(1, SLAB_H, 1, 2, 0.035);
+let roundGeo = new RoundedBoxGeometry(1, SLAB_H, 1, 2, 0.035), roundSegs = 2; // segments from the budget
 const edgeGeo = new THREE.EdgesGeometry(slabGeo);
 
 // Deterministic cosmetic PRNG (stars/motes), independent of gameplay streams.
@@ -83,14 +83,24 @@ function loadStoneTexture() {
   }, undefined, function () { /* no texture: procedural stone remains */ });
 }
 
+// Material model per budget: Lambert on Low, Standard on Balanced, clearcoat Physical on High/Ultra
+// (with Surface detail off every budget above Low uses Standard, like the original plain tier).
+function stoneKind() {
+  if (q.budget.stone === 'lambert') return 'lambert';
+  return q.detail === 'detailed' ? q.budget.stone : 'standard';
+}
 function newStoneMaterial(color, emissive, intensity) {
+  const kind = stoneKind();
+  if (kind === 'lambert') {
+    return new THREE.MeshLambertMaterial({ color: color, map: stoneTex, emissive: emissive, emissiveIntensity: intensity });
+  }
   const detailed = q.detail === 'detailed';
   const opts = {
     color: color, roughness: detailed ? 0.5 : 0.55, metalness: 0.08, map: stoneTex,
     emissive: emissive, emissiveIntensity: intensity,
     envMapIntensity: 0.35
   };
-  if (detailed) {
+  if (kind === 'physical') {
     opts.clearcoat = 0.35; opts.clearcoatRoughness = 0.38;
     return new THREE.MeshPhysicalMaterial(opts);
   }
@@ -99,21 +109,31 @@ function newStoneMaterial(color, emissive, intensity) {
 
 function makeStoneMesh(color, glow, emissive) {
   const mat = newStoneMaterial(color, emissive || glow, emissive ? 0.55 : 0.12);
-  const mesh = new THREE.Mesh(q.detail === 'detailed' ? roundGeo : slabGeo, mat);
+  const mesh = new THREE.Mesh(slabGeometry(), mat);
+  mesh.userData.kind = stoneKind();
   stoneMeshes.push(mesh);
   return mesh;
 }
 
 // Swap every stone mesh to the current detail tier, keeping its colours.
+function slabGeometry() {
+  return q.detail === 'detailed' && q.budget.bevel > 0 ? roundGeo : slabGeo;
+}
 function refreshStone() {
-  const detailed = q.detail === 'detailed';
+  const segs = Math.max(1, q.budget.bevel);
+  if (segs !== roundSegs) {
+    const old = roundGeo;
+    roundGeo = new RoundedBoxGeometry(1, SLAB_H, 1, segs, 0.035); roundSegs = segs;
+    old.dispose();
+  }
+  const kind = stoneKind();
   stoneMeshes.forEach(function (mesh) {
     const old = mesh.material;
-    const isPhys = !!old.isMeshPhysicalMaterial;
-    mesh.geometry = detailed ? roundGeo : slabGeo;
-    if (isPhys === detailed) { old.needsUpdate = true; return; }
+    mesh.geometry = slabGeometry();
+    if (mesh.userData.kind === kind) { old.needsUpdate = true; return; }
     const m = newStoneMaterial(old.color.getHex(), old.emissive.getHex(), old.emissiveIntensity);
     mesh.material = m;
+    mesh.userData.kind = kind;
     old.dispose();
   });
 }
@@ -220,7 +240,7 @@ function buildStars() {
   disposePoints(motes); motes = null;
   if (q.particles === 'off') return;
   const rnd = mulberry(0x5ba1);
-  const n = q.particles === 'high' ? 600 : 250;
+  const n = q.particles === 'high' ? q.budget.stars : Math.round(q.budget.stars * 0.4);
   const pos = new Float32Array(n * 3), ph = new Float32Array(n);
   for (let i = 0; i < n; i++) {
     const ang = rnd() * Math.PI * 2, r = 60 + rnd() * 60;
@@ -237,8 +257,8 @@ function buildStars() {
   stars.frustumCulled = false;
   scene.add(stars);
 
-  if (q.particles === 'high') {
-    const m = 70;
+  if (q.particles === 'high' && q.budget.motes > 0) {
+    const m = q.budget.motes;
     const mp = new Float32Array(m * 3), mph = new Float32Array(m);
     for (let i = 0; i < m; i++) {
       const ang = rnd() * Math.PI * 2, r = 1.8 + rnd() * 3.5;
@@ -287,30 +307,54 @@ function getWindowTexture() {
   return windowTex;
 }
 
-export function init(hostEl) {
-  host = hostEl;
-  try {
-    renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-  } catch (e) {
-    return false;
-  }
-  canvas = renderer.domElement;
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  host.appendChild(canvas);
-  detectGpu();
-  loadStoneTexture();
-
-  canvas.addEventListener('webglcontextlost', function (e) {
+// Canvas MSAA is only worth its cost when nothing is post-processed (the composer has its own
+// anti-aliasing), so the WebGL renderer is (re)created with antialias exactly when the resolved
+// settings render straight to the canvas with MSAA. Scene, materials and textures are kept.
+let canvasAA = null;
+function makeRenderer(aa) {
+  const next = new THREE.WebGLRenderer({ antialias: aa, powerPreference: 'high-performance' });
+  next.outputColorSpace = THREE.SRGBColorSpace;
+  next.toneMapping = THREE.ACESFilmicToneMapping;
+  next.toneMappingExposure = 1.05;
+  next.shadowMap.type = THREE.PCFSoftShadowMap;
+  const old = renderer;
+  renderer = next; canvasAA = aa;
+  const c = renderer.domElement;
+  if (canvas && canvas.dataset.gfxPreset) c.dataset.gfxPreset = canvas.dataset.gfxPreset;
+  c.addEventListener('webglcontextlost', function (e) {
     e.preventDefault(); ctxLost = true;
     window.dispatchEvent(new CustomEvent('bs-gl-lost'));
   });
-  canvas.addEventListener('webglcontextrestored', function () {
+  c.addEventListener('webglcontextrestored', function () {
     ctxLost = false; rebuild();
     window.dispatchEvent(new CustomEvent('bs-gl-restored'));
   });
+  if (old) {
+    if (composer) { composer.dispose(); composer = null; }
+    postKey = null;
+    if (envTex) { envTex.dispose(); envTex = null; }
+    if (pmrem) { pmrem.dispose(); pmrem = null; }
+    if (keyLight && keyLight.shadow.map) { keyLight.shadow.map.dispose(); keyLight.shadow.map = null; }
+    host.replaceChild(c, canvas);
+    old.dispose();
+    sizeW = sizeH = 0;
+  } else host.appendChild(c);
+  canvas = c;
+}
+
+export function init(hostEl) {
+  host = hostEl;
+  detectGpu();
+  // Start with the saved settings' anti-aliasing so the renderer is not created twice at load.
+  let saved = {};
+  try { saved = (window.BSSession && window.BSSession.settings && window.BSSession.settings.graphics) || {}; } catch (e) { saved = {}; }
+  q = Gfx.resolve(saved, detected, gpuLevel);
+  try {
+    makeRenderer(!q.post && q.antialias === 'msaa');
+  } catch (e) {
+    return false;
+  }
+  loadStoneTexture();
 
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(38, 1, 0.1, 220);
@@ -369,15 +413,24 @@ export function init(hostEl) {
   scene.add(rimGlow);
 
   buildSkyline(null);
-  setGraphics({});
+  setGraphics(saved);
   fitShadow(0);
   applySize();
   return true;
 }
 
+// StarHermit hardware level (gpu-level.js, window.StarHermitGpu) → Auto preset (Low 0, Balanced 4,
+// High 10, Ultra 17). Falls back to this renderer's unmasked name if the shared module is missing.
 function detectGpu() {
   try {
-    const gl = renderer.getContext();
+    if (window.StarHermitGpu) {
+      const info = window.StarHermitGpu.info();
+      gpu = String(info.gpu || ''); gpuLevel = info.level; detected = Gfx.presetForLevel(gpuLevel);
+      return;
+    }
+  } catch (e) { /* fall back below */ }
+  try {
+    const gl = renderer ? renderer.getContext() : document.createElement('canvas').getContext('webgl2');
     // Firefox exposes the unmasked name through RENDERER and warns on the debug extension.
     const ff = /firefox/i.test(navigator.userAgent);
     const ext = ff ? null : gl.getExtension('WEBGL_debug_renderer_info');
@@ -385,7 +438,8 @@ function detectGpu() {
   } catch (e) { gpu = ''; }
   const mobile = (window.matchMedia && matchMedia('(pointer: coarse)').matches) ||
     /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
-  detected = Gfx.detectPreset(gpu, { mobile: mobile });
+  gpuLevel = Gfx.detectLevel(gpu, { mobile: mobile });
+  detected = Gfx.presetForLevel(gpuLevel);
 }
 
 // ---------- environment (deterministic from decor stream) ----------
@@ -405,7 +459,7 @@ function buildSkyline(decorRng) {
     mats = [side, side, roof, roof, side, side];
   }
   const geo = new THREE.BoxGeometry(1, 1, 1);
-  const count = detailed ? 56 : 24;
+  const count = q.budget.skyline;
   const inst = new THREE.InstancedMesh(geo, mats, count);
   const m = new THREE.Matrix4();
   for (let i = 0; i < count; i++) {
@@ -419,6 +473,7 @@ function buildSkyline(decorRng) {
   inst.instanceMatrix.needsUpdate = true;
   skyline.add(inst);
   skyline.userData.rng = decorRng || null;
+  skyline.userData.key = detailed + ':' + count;
   scene.add(skyline);
 }
 function mulberryRng(seed) { const f = mulberry(seed); return { next: f }; }
@@ -458,9 +513,11 @@ let gfxJson = null;
 export function setGraphics(saved) {
   const json = JSON.stringify(saved || {});
   if (json === gfxJson && renderer) return; // unrelated settings changed
-  q = Gfx.resolve(saved || {}, detected);
+  q = Gfx.resolve(saved || {}, detected, gpuLevel);
   if (!renderer) return;
   gfxJson = json;
+  const aa = !q.post && q.antialias === 'msaa';
+  if (aa !== canvasAA) makeRenderer(aa);
   const size = Gfx.SHADOW_MAP[q.shadows];
   renderer.shadowMap.enabled = size > 0;
   keyLight.castShadow = size > 0;
@@ -488,10 +545,11 @@ export function setGraphics(saved) {
     hemi.intensity = 0.95;
   }
 
-  const wasDetailed = skyline && skyline.children[0] && Array.isArray(skyline.children[0].material);
+  const sk = skyline && skyline.children[0];
+  const skyKey = (q.detail === 'detailed') + ':' + q.budget.skyline;
   refreshStone();
   applyBackground();
-  if (wasDetailed !== (q.detail === 'detailed')) buildSkyline(skyline ? skyline.userData.rng : null);
+  if (!sk || skyline.userData.key !== skyKey) buildSkyline(skyline ? skyline.userData.rng : null);
   buildStars();
   // Materials pick up shadow-map / environment changes on recompile.
   scene.traverse(function (o) {
@@ -517,7 +575,7 @@ export function setQuality(tier) {
 export function graphicsInfo() {
   const px = [Math.round(sizeW * pixelRatio), Math.round(sizeH * pixelRatio)];
   return {
-    gpu: gpu || 'unknown GPU', detected: detected, resolved: q,
+    gpu: gpu || 'unknown GPU', level: gpuLevel, detected: detected, resolved: q,
     summary: Gfx.describe(q, px), pixels: px, fps: Math.round(fps),
     adaptiveScale: Math.round(adaptiveScale * 100) / 100, postFailed: postFailed
   };
@@ -586,7 +644,8 @@ function buildPost(w, h) {
     }
     if (q.bloom === 'on') {
       // High threshold: only the emissive moving slab, perfect glows and the rim inlay bloom.
-      c.addPass(new UnrealBloomPass(new THREE.Vector2(w, h), 0.32, 0.4, 0.92));
+      const br = q.budget.bloomRes; // bloom at the budget's fraction of the canvas resolution
+      c.addPass(new UnrealBloomPass(new THREE.Vector2(Math.round(pw * br), Math.round(ph * br)), 0.32, 0.4, 0.92));
     }
     c.addPass(new OutputPass());
     if (q.grade === 'on') {
@@ -740,7 +799,7 @@ function flashTop(strength) {
 }
 
 function spawnDebris(ev) {
-  if (debris.length > 12) return; // pooled cap
+  if (debris.length >= q.budget.debris && !debris.some(function (x) { return !x.active; })) return; // pooled cap from the budget
   let d = debris.find(function (x) { return !x.active; });
   if (!d) {
     const mesh = makeStoneMesh(theme ? theme.stoneDark : 0x8a8078, 0x000000);

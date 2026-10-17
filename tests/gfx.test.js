@@ -6,17 +6,38 @@ const test = require('node:test');
 const assert = require('node:assert');
 const G = require('../js/gfx.js');
 
-test('detectPreset maps GPU strings to presets', () => {
+test('hardware level picks the Auto preset (StarHermit gpu-level.js)', () => {
   assert.strictEqual(G.detectPreset('ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)), SwiftShader driver)'), 'low');
   assert.strictEqual(G.detectPreset('llvmpipe (LLVM 15.0.7, 256 bits)'), 'low');
+  assert.strictEqual(G.detectPreset('ANGLE (AMD, AMD Radeon(TM) Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)'), 'low');
+  assert.strictEqual(G.detectPreset('ANGLE (Intel, Intel(R) UHD Graphics 620 Direct3D11)'), 'low');
+  assert.strictEqual(G.detectPreset('ANGLE (Intel, Intel(R) Iris(R) Xe Graphics Direct3D11)'), 'balanced');
   assert.strictEqual(G.detectPreset('ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 Direct3D11 vs_5_0 ps_5_0)'), 'high');
-  assert.strictEqual(G.detectPreset('Apple M2'), 'high');
-  assert.strictEqual(G.detectPreset('ANGLE (Intel, Intel(R) UHD Graphics 620 Direct3D11)'), 'balanced');
-  assert.strictEqual(G.detectPreset('Adreno (TM) 650'), 'balanced');
-  assert.strictEqual(G.detectPreset(''), 'balanced');
-  // Touch/mobile devices cap Auto at balanced.
-  assert.strictEqual(G.detectPreset('Apple M2', { mobile: true }), 'balanced');
+  assert.strictEqual(G.detectPreset('ANGLE (NVIDIA, NVIDIA GeForce RTX 4080 Direct3D11 vs_5_0 ps_5_0)'), 'ultra');
+  assert.strictEqual(G.detectPreset('ANGLE (NVIDIA, NVIDIA GeForce RTX 5090 Direct3D11 vs_5_0 ps_5_0)'), 'ultra');
+  assert.strictEqual(G.detectLevel('NVIDIA GeForce RTX 5090'), 20);
+  assert.strictEqual(G.detectPreset('Adreno (TM) 740', { mobile: true }), 'balanced');
+  assert.strictEqual(G.detectPreset('NVIDIA GeForce RTX 5090', { mobile: true }), 'balanced');
   assert.strictEqual(G.detectPreset('SwiftShader', { mobile: true }), 'low');
+  for (const [p, lv] of Object.entries(G.LEVELS)) assert.strictEqual(G.presetForLevel(lv), p);
+  assert.strictEqual(G.presetForLevel(9), 'balanced');
+  assert.strictEqual(G.presetForLevel(16), 'high');
+});
+
+test('per-preset budgets are explicit, grow from Low to Ultra and scale with the level', () => {
+  const keys = ['stone', 'bevel', 'skyline', 'stars', 'motes', 'debris', 'bloomRes'];
+  for (const p of G.PRESETS) for (const k of keys) assert.ok(k in G.BUDGETS[p], p + '.' + k);
+  for (let i = 1; i < G.PRESETS.length; i++) {
+    const a = G.BUDGETS[G.PRESETS[i - 1]], b = G.BUDGETS[G.PRESETS[i]];
+    for (const k of ['bevel', 'skyline', 'stars', 'motes', 'debris', 'bloomRes']) assert.ok(b[k] >= a[k], G.PRESETS[i] + '.' + k);
+  }
+  assert.strictEqual(G.BUDGETS.low.stone, 'lambert');
+  assert.strictEqual(G.BUDGETS.ultra.stone, 'physical');
+  assert.deepStrictEqual(G.budget('high', 10), G.BUDGETS.high);
+  assert.ok(G.budget('high', 14).stars > G.BUDGETS.high.stars);
+  assert.ok(G.budget('ultra', 20).stars <= G.BUDGETS.ultra.stars * 4);
+  assert.ok(G.budget('ultra', 2).stars < G.BUDGETS.ultra.stars);
+  assert.deepStrictEqual(G.resolve({ preset: 'low' }, 'low', 0).budget, G.BUDGETS.low);
 });
 
 test('resolve: auto uses the detected preset, explicit preset wins', () => {

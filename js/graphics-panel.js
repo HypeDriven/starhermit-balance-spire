@@ -10,7 +10,7 @@
   'use strict';
 
   var EN = {
-    graphics: 'Graphics', quality: 'Quality', auto: 'Auto (detected: {tier})',
+    level: 'Level {level}', graphics: 'Graphics', quality: 'Quality', auto: 'Auto (detected: {tier})',
     renderScale: 'Render scale', fromPreset: 'From preset ({tier})',
     adaptive: 'Adaptive resolution', showFps: 'Show frame rate',
     postFailed: 'Post-processing is unavailable on this device, so effects render without it.',
@@ -36,7 +36,7 @@
   }
 
   var ES = {
-    graphics: 'Gráficos', quality: 'Calidad', auto: 'Automática (detectada: {tier})',
+    level: 'Nivel {level}', graphics: 'Gráficos', quality: 'Calidad', auto: 'Automática (detectada: {tier})',
     renderScale: 'Escala de renderizado', fromPreset: 'Según el ajuste ({tier})',
     adaptive: 'Resolución adaptativa', showFps: 'Mostrar cuadros por segundo',
     postFailed: 'El posprocesado no está disponible en este dispositivo; los efectos se muestran sin él.',
@@ -53,7 +53,7 @@
   };
 
   var FR = {
-    graphics: 'Graphismes', quality: 'Qualité', auto: 'Auto (détectée : {tier})',
+    level: 'Niveau {level}', graphics: 'Graphismes', quality: 'Qualité', auto: 'Auto (détectée : {tier})',
     renderScale: 'Échelle de rendu', fromPreset: 'Selon le préréglage ({tier})',
     adaptive: 'Résolution adaptative', showFps: 'Afficher les images par seconde',
     postFailed: 'Le post-traitement n’est pas disponible sur cet appareil ; les effets s’affichent sans lui.',
@@ -76,7 +76,7 @@
     'es-ES': variant(ES, { showFps: 'Mostrar fotogramas por segundo',
       fromPreset: 'Según el preajuste ({tier})', cats: { antialias: 'Suavizado de bordes' } }),
     'de-DE': {
-      graphics: 'Grafik', quality: 'Qualität', auto: 'Automatisch (erkannt: {tier})',
+      level: 'Stufe {level}', graphics: 'Grafik', quality: 'Qualität', auto: 'Automatisch (erkannt: {tier})',
       renderScale: 'Renderskalierung', fromPreset: 'Wie Voreinstellung ({tier})',
       adaptive: 'Adaptive Auflösung', showFps: 'Bildrate anzeigen',
       postFailed: 'Nachbearbeitung ist auf diesem Gerät nicht verfügbar; Effekte werden ohne sie dargestellt.',
@@ -94,7 +94,7 @@
     'fr-FR': FR,
     'fr-CA': variant(FR, { showFps: 'Afficher la fréquence d’images' }),
     'pt-BR': {
-      graphics: 'Gráficos', quality: 'Qualidade', auto: 'Automática (detectada: {tier})',
+      level: 'Nível {level}', graphics: 'Gráficos', quality: 'Qualidade', auto: 'Automática (detectada: {tier})',
       renderScale: 'Escala de renderização', fromPreset: 'Conforme a predefinição ({tier})',
       adaptive: 'Resolução adaptativa', showFps: 'Mostrar taxa de quadros',
       postFailed: 'O pós-processamento não está disponível neste dispositivo; os efeitos são exibidos sem ele.',
@@ -110,7 +110,7 @@
         particles: 'partículas: {tier}', tiers: { low: 'baixo', high: 'alto' } }
     },
     'it-IT': {
-      graphics: 'Grafica', quality: 'Qualità', auto: 'Automatica (rilevata: {tier})',
+      level: 'Livello {level}', graphics: 'Grafica', quality: 'Qualità', auto: 'Automatica (rilevata: {tier})',
       renderScale: 'Scala di rendering', fromPreset: 'Come da preimpostazione ({tier})',
       adaptive: 'Risoluzione adattiva', showFps: 'Mostra frequenza fotogrammi',
       postFailed: 'La post-elaborazione non è disponibile su questo dispositivo; gli effetti vengono mostrati senza.',
@@ -256,7 +256,8 @@
   function updateSummary() {
     var info = R.graphicsInfo ? R.graphicsInfo() : null;
     if (!info) { ids['gfx-summary'].textContent = ''; return; }
-    ids['gfx-summary'].textContent = info.gpu + ' · ' + G.describe(info.resolved, info.pixels, T.describe);
+    ids['gfx-summary'].textContent = info.gpu + ' · ' + T.level.replace('{level}', info.level) + ' · ' +
+      G.describe(info.resolved, info.pixels, T.describe);
     ids['gfx-post-note'].hidden = !info.postFailed;
     document.body.dataset.gfxPreset = info.resolved.preset;
   }

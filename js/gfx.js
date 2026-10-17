@@ -39,15 +39,58 @@
 
   var SHADOW_MAP = { off: 0, low: 1024, medium: 2048, high: 4096 };
 
-  /** Best preset for this GPU (unmasked renderer string). Touch devices cap at balanced. */
-  function detectPreset(gpu, opts) {
-    var g = String(gpu || '').toLowerCase();
-    var tier;
-    if (/swiftshader|llvmpipe|softpipe|software|basic render|microsoft basic/.test(g)) tier = 'low';
-    else if (/nvidia|geforce|rtx|gtx|quadro|radeon rx|radeon pro|amd radeon(?!.*graphics)|apple m\d/.test(g)) tier = 'high';
-    else tier = 'balanced';
-    if (opts && opts.mobile && tier === 'high') tier = 'balanced';
-    return tier;
+  // StarHermit hardware level (0–20, gpu-level.js) at which Auto starts choosing each preset.
+  var LEVELS = { low: 0, balanced: 4, high: 10, ultra: 17 };
+
+  // Per-preset asset and effect budgets, each tuned to hold 60 FPS on the weakest GPU Auto gives the
+  // preset (Low: level 0 phones / Intel UHD; Balanced: level 4 Iris Xe; High: level 10 GTX 1070;
+  // Ultra: level 17 RTX 4080). Gameplay is identical on every preset.
+  //   stone     — slab material: 'lambert' (per-vertex light), 'standard' (PBR) or 'physical' (clearcoat)
+  //   bevel     — rounded-slab bevel segments with Surface detail on (0 = plain boxes)
+  //   skyline   — instanced skyline buildings (lit windows with detail on)
+  //   stars     — star points (Particles: high; low uses 40 %), scaled by the hardware level
+  //   motes     — rising motes around the tower top (Particles: high)
+  //   debris    — pooled falling trim pieces
+  //   bloomRes  — bloom pass resolution as a fraction of the canvas
+  var BUDGETS = {
+    low: { stone: 'lambert', bevel: 0, skyline: 16, stars: 250, motes: 0, debris: 4, bloomRes: 0.5 },
+    balanced: { stone: 'standard', bevel: 2, skyline: 40, stars: 400, motes: 30, debris: 8, bloomRes: 0.5 },
+    high: { stone: 'physical', bevel: 2, skyline: 56, stars: 600, motes: 70, debris: 12, bloomRes: 0.75 },
+    ultra: { stone: 'physical', bevel: 4, skyline: 96, stars: 1200, motes: 140, debris: 16, bloomRes: 1 }
+  };
+
+  function gpuApi() {
+    if (typeof StarHermitGpu !== 'undefined') return StarHermitGpu;
+    if (typeof require === 'function') { try { return require('../gpu-level.js'); } catch (e) { /* not bundled */ } }
+    return null;
+  }
+
+  /** Hardware level 0–20 for a renderer string (system: optional detectSystem() fields, e.g. mobile). */
+  function detectLevel(gpu, system) {
+    var G = gpuApi();
+    if (!G) return 0;
+    return G.detectLevel(Object.assign({ webgl: true, webgl2: true }, system || {}, { gpu: String(gpu || '') }));
+  }
+
+  /** Auto preset for a hardware level: Low 0, Balanced 4, High 10, Ultra 17. */
+  function presetForLevel(level) {
+    var G = gpuApi();
+    if (G) return G.presetForLevel(level, LEVELS);
+    return PRESETS.filter(function (p) { return LEVELS[p] <= level; }).pop() || 'low';
+  }
+
+  /** Best preset for this GPU (hardware level → preset). */
+  function detectPreset(gpu, system) {
+    return presetForLevel(detectLevel(gpu, system));
+  }
+
+  /** The preset's budget, with star and mote counts scaled by the level within the preset. */
+  function budget(preset, level) {
+    var b = BUDGETS[preset] || BUDGETS.balanced;
+    var G = gpuApi(), floor = LEVELS[preset] || 0;
+    var lv = level == null || !isFinite(level) ? floor : level;
+    var sc = function (n) { return Math.round(G ? G.scaleBudget(n, lv, floor) : n); };
+    return Object.assign({}, b, { stars: sc(b.stars), motes: sc(b.motes) });
   }
 
   function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
@@ -56,7 +99,7 @@
    * Resolve saved settings into concrete tiers.
    * saved: { preset: 'auto'|preset, render_scale, adaptive, show_fps, <category>: 'preset'|tier }
    */
-  function resolve(saved, detected) {
+  function resolve(saved, detected, level) {
     var s = saved || {};
     var isPreset = PRESETS.indexOf(s.preset) >= 0;
     var preset = isPreset ? s.preset : (PRESETS.indexOf(detected) >= 0 ? detected : 'balanced');
@@ -71,6 +114,7 @@
     Object.keys(CATEGORIES).forEach(function (cat) {
       out[cat] = CATEGORIES[cat].indexOf(s[cat]) >= 0 ? s[cat] : row[cat];
     });
+    out.budget = budget(preset, level);
     out.adaptive = s.adaptive !== false;
     out.showFps = !!s.show_fps;
     // Post-processing runs only when something needs it; otherwise canvas MSAA is used.
@@ -116,6 +160,7 @@
 
   return {
     PRESETS: PRESETS, CATEGORIES: CATEGORIES, SHADOW_MAP: SHADOW_MAP,
+    LEVELS: LEVELS, BUDGETS: BUDGETS, detectLevel: detectLevel, presetForLevel: presetForLevel, budget: budget,
     detectPreset: detectPreset, resolve: resolve, presetTier: presetTier,
     choosePreset: choosePreset, describe: describe
   };
