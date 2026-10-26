@@ -43,7 +43,7 @@
     "sfx/slab-place.opus": {"sha256": "c12ff3d3b2de27b3809db7444521678b5ebb3fd94d33a1c1edae50f9801a6dc0", "size": 15301},
     "sfx/stage-win.opus": {"sha256": "d0c06091bfa34d98fa20bf531b347bc6a09d698ea2dc3dff090913d650322902", "size": 40205},
     "sfx/ui-ack.opus": {"sha256": "1ec3f4b6c4d2273dd89e58b62ae6a50a36aea90be269407000f7f1e0822b1f5e", "size": 11671},
-    "spec.md": {"sha256": "7c8cf67693871758f64f57235f72891ff9e394c7acc50e1f698c660f67b31fc1", "size": 37972},
+    "spec.md": {"sha256": "8cbf3ab103d34469f8a1dc9a54611d00c17ea0870c39c7879a890a287fd91565", "size": 37972},
     "starhermit.txt": {"sha256": "c6d4387e097f84b43aebc39c6fdf6527bc243db0e0a1217bba285a9501e6f1f8", "size": 1265}
   },
   "excluded": ["data/", "node_modules/", "package-lock.json", "package.json", "server.js", "test-results/", "tests/", "tools/", "tsconfig.json"],
