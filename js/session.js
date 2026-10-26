@@ -58,6 +58,11 @@
     } catch (e) { /* storage full/blocked: play on without persistence */ }
   }
 
+  // The round clock (milliseconds). The browser build read performance.now();
+  // the engine client sets the fixed-step clock (setClock) so ticks follow
+  // the runtime's simulation steps and never the wall clock.
+  var clock = function () { return performance.now(); };
+
   var listeners = {};
   function on(evt, cb) { (listeners[evt] = listeners[evt] || []).push(cb); }
   function emit(evt, a, b) {
@@ -95,7 +100,7 @@
       undoStack: [],
       hashes: [Rules.hashState(state)],
       startedAt: Date.now(),
-      wallBase: 0,             // performance.now() base for tick conversion
+      wallBase: 0,             // clock() base for tick conversion
       pauseBase: 0,
       countdownLeft: 3,
       lessonProgress: 0,
@@ -113,14 +118,14 @@
   function tickNow() {
     if (!round) return 0;
     if (round.phase === 'active') {
-      return Math.max(Math.floor((performance.now() - round.wallBase) / 1000 * TPS), round.state.tick);
+      return Math.max(Math.floor((clock() - round.wallBase) / 1000 * TPS), round.state.tick);
     }
     return round.state.tick;
   }
 
   function beginActive() {
     round.phase = 'active';
-    round.wallBase = performance.now() - round.state.tick * 1000 / TPS;
+    round.wallBase = clock() - round.state.tick * 1000 / TPS;
     emit('phase', 'active');
   }
 
@@ -184,7 +189,7 @@
   function resume() {
     if (!round || round.phase !== 'paused') return;
     var at = Number.isFinite(round.pausedTick) ? round.pausedTick : round.state.tick;
-    round.wallBase = performance.now() - at * 1000 / TPS;
+    round.wallBase = clock() - at * 1000 / TPS;
     round.phase = 'active';
     emit('phase', 'active');
   }
@@ -207,7 +212,7 @@
     if (!round) return;
     if (round.phase === 'countdown') {
       if (round.countdownStart == null) return; // startCountdown not called yet
-      var left = Math.ceil(3 - (performance.now() - round.countdownStart) / 750);
+      var left = Math.ceil(3 - (clock() - round.countdownStart) / 750);
       if (left !== round.countdownLeft) {
         round.countdownLeft = left;
         emit('countdown', left);
@@ -227,7 +232,7 @@
   }
 
   function startCountdown() {
-    round.countdownStart = performance.now();
+    round.countdownStart = clock();
     round.countdownLeft = 3;
     round.phase = 'countdown';
     emit('phase', 'countdown');
@@ -390,6 +395,8 @@
       return true;
     },
     DEFAULT_SETTINGS: DEFAULT_SETTINGS,
+    /** Replace the round clock (a function returning milliseconds). */
+    setClock: function (fn) { clock = fn; },
     get round() { return round; },
     startRound: startRound,
     startCountdown: startCountdown,

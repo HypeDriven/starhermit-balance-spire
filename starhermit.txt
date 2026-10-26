@@ -1,12 +1,35 @@
 name=Balance Spire
 description=Time each sliding slab to build a taller tower, keeping your landings precise as the platform narrows.
-launch=index.html
 owner=2712e04e-461b-4d23-81ae-e40b429128a8
 server=score-script.js
 cover=cover.jpg
+
+# StarHermit engine script game: one package, played natively by the
+# StarHermit client and in browsers by the engine's web runtime. Browsers open
+# launch=index.html, the loader `npm run package` writes (it pins the engine
+# on wiki.starhermit.com; never edit it). Re-run `npm run package` after every
+# change and commit index.html + starhermit-files.json.
+launch=index.html
+engine.api=1
+engine.entry=native/main.ts
+engine.version=1.13.2
+engine.minor=14
+engine.capabilities=platform,storage,clipboard
+
+# Keyboard controls (players rebind keys and pads in the runtime's Options).
 control.drop=Space+Enter+NumpadEnter | Drop slab
 control.pause=KeyP | Pause / resume
 control.back=Escape | Back / pause
 control.undo=KeyU | Undo
 control.hint=KeyH | Hint
 control.camera=KeyC | Refocus camera
+engine.group.drop=Round
+engine.group.undo=Assists
+
+# Gamepad defaults for the same actions.
+engine.gamepad.drop=South
+engine.gamepad.pause=Start
+engine.gamepad.back=East
+engine.gamepad.undo=West
+engine.gamepad.hint=North
+engine.gamepad.camera=RightStickPress

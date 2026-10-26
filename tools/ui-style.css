@@ -1,0 +1,129 @@
+/* Balance Spire — the browser client's style sheet (css/style.css), kept for
+ * the engine port and rewritten class-based for `starhermit css` (`npm run
+ * css` converts it into assets/ui-style.json, which native/style.ts
+ * registers): ids, element selectors (h1, h2, kbd, strong, span, em, table
+ * cells) and compound classes became classes of their own; the media
+ * queries, safe-area insets, ui-scale zoom, the high-contrast / large-text /
+ * reduced-motion html classes, the graphics panel and the fps meter are
+ * gone: the runtime gives interface size, text size, high contrast, reduced
+ * motion and graphics, and native/screens.ts picks the compact layouts by
+ * window size. The title's key art is drawn under the UI (draw.image). */
+* { box-sizing: border-box; }
+:root {
+  --ink: #f0ece4;
+  --ink-dim: #b6b0a6;
+  --bg: #14101e;
+  --panel: rgba(24, 20, 36, 0.92);
+  --line: #3a3450;
+  --accent: #ffd9a0;
+  --accent-2: #9fc8ff;
+  --danger: #e86a5a;
+  --focus: #fff2cc;
+  --hover: #2a2440;
+  font-size: 16px;
+}
+
+/* ---------- shared controls ---------- */
+.btn {
+  border: 1px solid var(--line); border-radius: 12px;
+  background: var(--panel); color: var(--ink);
+  min-height: 44px; min-width: 44px; padding: 0.6rem 1.1rem; font-size: 1rem; text-align: center;
+  transition: background 0.12s ease, transform 0.12s ease;
+}
+.btn:hover { background: var(--hover); }
+.btn:active { transform: scale(0.97); }
+.btn:disabled { opacity: 0.45; }
+.btn:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.btn-primary { background: var(--accent); color: #241c10; border-color: transparent; font-weight: 600; }
+.btn-primary:hover { background: #ffe4b8; }
+.btn-danger { color: var(--danger); border-color: var(--danger); }
+.btn-subtle { opacity: 0.85; }
+.btn-big { font-size: 1.15rem; padding: 0.8rem 1.6rem; }
+.btn-tray { padding: 0.6rem 0.9rem; }
+.btn-tray-compact { padding: 0.5rem 0.3rem; }
+.kbd {
+  font-size: 0.7rem; font-family: monospace; background: rgba(0, 0, 0, 0.25);
+  padding: 0.1rem 0.4rem; border-radius: 4px;
+}
+
+.panel {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 12px; padding: 1rem;
+}
+.dim { color: var(--ink-dim); }
+.status { color: var(--accent-2); }
+.headline { font-size: 1.4rem; font-weight: 700; color: var(--ink); }
+.screen-title { font-size: 1.5rem; font-weight: 700; color: var(--ink); }
+
+/* ---------- HUD ---------- */
+.hud-box {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 12px; padding: 0.5rem 0.8rem;
+}
+.hud-objective { font-size: 1rem; font-weight: 700; color: var(--ink); }
+.hud-progress { color: var(--ink-dim); font-size: 0.9rem; }
+.hud-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-dim); }
+.hud-value { font-size: 1.15rem; font-variant-numeric: tabular-nums; color: var(--ink); }
+
+/* ---------- action tray ---------- */
+.tray {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 18px; padding: 6px;
+}
+
+/* ---------- screens ---------- */
+.screen { background: rgba(10, 8, 18, 0.72); padding: 1rem; }
+.sheet { background: rgba(10, 8, 18, 0.85); padding: 1rem; }
+.title-screen { padding: 1rem; }
+.game-title { font-size: 4rem; font-weight: 700; letter-spacing: 0.04em; color: var(--accent); text-shadow: 0 0 24px rgba(255, 217, 160, 0.35); }
+.game-title-compact { font-size: 2.2rem; }
+.tagline { color: var(--ink-dim); }
+
+.card {
+  text-align: left; border: 1px solid var(--line); border-radius: 12px;
+  background: var(--panel); color: var(--ink); padding: 1rem; min-height: 44px;
+}
+.card:hover { background: var(--hover); }
+.card:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.card-title { font-size: 1.1rem; font-weight: 700; color: var(--ink); }
+.card-desc { color: var(--ink-dim); }
+.card-status { color: var(--accent-2); font-size: 0.85rem; }
+.help-card { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); padding: 1rem; }
+
+.list-btn {
+  text-align: left; background: var(--panel); border: 1px solid var(--line); color: var(--ink);
+  border-radius: 8px; padding: 0.55rem 0.9rem; min-height: 44px;
+}
+.list-btn:hover { background: var(--hover); }
+.list-btn:disabled { opacity: 0.45; }
+.list-btn:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.list-btn[aria-selected=true] { border-color: var(--accent); }
+.stars { color: var(--accent); }
+
+.score-caption { color: var(--ink-dim); }
+.score-row { border-bottom: 1px solid rgba(58, 52, 80, 0.6); }
+.score-total { border-top: 1px solid var(--line); }
+.cell { padding: 0.25rem 0.8rem; color: var(--ink); }
+.cell-num { padding: 0.25rem 0.8rem; color: var(--ink); font-variant-numeric: tabular-nums; text-align: right; }
+.cell-strong { padding: 0.25rem 0.8rem; color: var(--ink); font-weight: 700; }
+.cell-strong-num { padding: 0.25rem 0.8rem; color: var(--ink); font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+
+.badge {
+  background: var(--hover); border: 1px solid var(--accent); border-radius: 999px;
+  padding: 0.3rem 0.9rem; font-size: 0.9rem; color: var(--accent);
+}
+
+.fieldset { border: 1px solid var(--line); border-radius: 12px; padding: 0.8rem 1rem; }
+.legend { color: var(--ink-dim); }
+.board-row { padding: 0.2rem 0; color: var(--ink); }
+
+.caption {
+  background: rgba(0, 0, 0, 0.75); border-radius: 8px; padding: 0.3rem 0.9rem;
+  font-size: 0.95rem; color: var(--ink);
+}
+.toast {
+  background: var(--panel); border: 1px solid var(--accent); color: var(--ink);
+  border-radius: 999px; padding: 0.5rem 1.2rem; text-align: center;
+}
+.countdown { font-size: 9rem; font-weight: 800; color: var(--accent); text-shadow: 0 0 32px rgba(255, 217, 160, 0.5); }
+.countdown-compact { font-size: 4rem; }

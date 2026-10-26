@@ -1,0 +1,37 @@
+# Practice (Calm) and the round's actions: a hint (H) marks the perfect
+# window, a finger's tap on the tray's Drop places a slab, Undo (U) takes it
+# back, Pause (P) opens the pause screen and P resumes; then Leave round ends
+# the round to its results.
+until 300 Play
+frames 5
+click Play
+until 60 Practice
+frames 5
+click Practice
+until 60 Endless rehearsal
+frames 5
+click Calm
+frames 150
+key KeyH 2
+until 30 perfect window marked
+save hint
+frames 5
+touch Drop
+until 30 HEIGHT1
+key KeyU 2
+until 30 drop undone
+expect HEIGHT0
+key KeyP 2
+until 60 Restart round
+frames 5
+save practice-paused
+key KeyP 2
+until 60 Drop
+frames 5
+key Escape 2
+until 60 Leave round
+frames 5
+click Leave round
+until 120 Round over
+expect you left the round
+save practice-results

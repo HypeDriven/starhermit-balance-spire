@@ -1,0 +1,35 @@
+# A ranked Score chase run (endless, one life) to its results: one slab
+# placed, then a slab that sails past ends the round (any drop near tick 49
+# and then near 98 does). The run lands on this device's board, shown on the
+# Leaderboards screen; signed out, nothing is posted to StarHermit.
+until 300 Play
+frames 5
+click Play
+until 60 Choose a mode
+frames 5
+save modes
+click Score chase
+until 60 Start
+frames 5
+save score-setup
+click Start
+frames 184
+key Space 2
+frames 47
+key Space 2
+until 200 Round over
+expect a slab sailed past
+expect Local board: rank #1 of 1.
+frames 5
+save score-results
+click Modes
+until 60 Choose a mode
+frames 5
+key Escape 2
+until 60 Leaderboards
+frames 5
+click Leaderboards
+until 60 Score chase — this device
+expect You (Player
+frames 5
+save board

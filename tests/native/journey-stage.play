@@ -1,0 +1,64 @@
+# The title's Settings and How to play screens, then Journey stage 1 (First
+# Stone: 8 slabs) won with eight perfect drops on the Drop key. The round
+# clock is the runtime's fixed steps (one tick a frame here): the countdown
+# is 135 ticks and each wait below is a perfect window's middle from
+# `node tools/perfect-plan.mjs j01`, less the 2 frames of the key press.
+until 300 Play
+frames 5
+click Settings
+until 60 Hold-to-confirm drops
+frames 5
+save settings
+click Done
+until 60 How to play
+frames 5
+click How to play
+until 60 Keyboard
+frames 5
+save help
+click Back
+until 60 Journey
+frames 5
+click Journey
+until 60 1. First Stone
+frames 5
+save setup
+click 1. First Stone
+frames 220
+key Space 2
+frames 62
+key Space 2
+frames 124
+key Space 2
+expect STREAK3
+save journey
+frames 112
+key Space 2
+frames 230
+key Space 2
+frames 154
+key Space 2
+frames 113
+key Space 2
+frames 257
+key Space 2
+until 120 Stage complete!
+expect Perfect placements (8)
+expect Next stage
+frames 5
+save journey-results
+click Next stage
+until 60 Second Course
+frames 150
+key Escape 2
+until 60 Leave round
+frames 5
+click Leave round
+until 60 Round over
+frames 5
+click Modes
+until 60 Choose a mode
+frames 5
+click Journey
+until 60 2. Second Course
+expect ★★★

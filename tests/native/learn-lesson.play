@@ -1,0 +1,24 @@
+# Learn: the first lesson (Set a stone: land three slabs) completed with the
+# keyboard's Enter (a Drop key too): the lesson toast, then Escape pauses and
+# Leave round shows the results. Waits from `node tools/perfect-plan.mjs t1 3`.
+until 300 Learn
+frames 5
+click Learn
+until 60 Set a stone
+frames 5
+save learn-setup
+click Set a stone
+frames 243
+key Enter 2
+frames 233
+key Enter 2
+frames 312
+key Enter 2
+until 60 Lesson complete: Set a stone
+save lesson-done
+frames 5
+key Escape 2
+until 60 Leave round
+frames 5
+click Leave round
+until 120 Round over
