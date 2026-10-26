@@ -137,7 +137,7 @@ function drawBackdrop(): void {
 
 // ------------------------------------------------------------------ the frame
 // The first control of each screen, by label: ui.setFocus takes the widget's
-// label (an ui.id() name does not match; engine 1.13.2).
+// label (an ui.id() name does not match; engine 1.14.0).
 function firstLabel(name: ScreenName): string | null {
   switch (name) {
     case "title": return t("play");
