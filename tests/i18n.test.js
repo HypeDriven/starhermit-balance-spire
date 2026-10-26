@@ -19,7 +19,7 @@ for (const m of code.matchAll(/\bt\("([A-Za-z0-9.\-]+)"(?!\s*\+)/g)) used.add(m[
 for (const mode of ['journey', 'practice', 'challenge', 'score', 'learn', 'daily']) used.add('setup.' + mode);
 for (const c of ['slab placed', 'perfect placement', 'overhang trimmed', 'slab missed', 'stage complete', 'round over', 'drop undone', 'perfect window marked', 'go', 'lesson complete']) {
   used.add('cap.' + c);
-  assert.ok(code.includes(`caption("${c}")`), `audio.ts captions "${c}"`);
+  assert.ok(code.includes(`"${c}"`), `audio.ts captions "${c}"`);
 }
 for (const r of ['missed', 'move-limit', 'time-up', 'resigned']) used.add('why.' + r);
 for (const r of ['undo-unavailable', 'hint-unavailable', 'game-ended', 'unknown-command', 'malformed-command', 'bad-tick', 'early-timeout', 'no-time-limit']) used.add('reason.' + r);

@@ -46,7 +46,7 @@ const url = `http://127.0.0.1:${server.address().port}/`;
 
 const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--enable-features=Vulkan'] });
 let failed = false;
-const play = [['shot', 'title'], ['key', 'Enter'], ['shot', 'modes'], ['key', 'Enter'], ['shot', 'setup'], ['key', 'Enter'], ['wait', 3000], ['shot', 'play']];
+const play = [['click', 4, 4], ['shot', 'title'], ['key', 'Enter'], ['shot', 'modes'], ['key', 'Enter'], ['shot', 'setup'], ['key', 'Enter'], ['wait', 3000], ['shot', 'play']];
 const views = [
   { name: 'desktop', viewport: { width: 1366, height: 768 }, steps: [...play, ['key', 'Space'], ['key', 'KeyH'], ['shot', 'dropped'], ['key', 'Escape'], ['shot', 'pause']] },
   // phone: into a round by keys, then taps on the playfield (above the tray) drop
@@ -71,9 +71,10 @@ for (const v of views) {
   for (const [op, a, b] of v.steps) {
     if (op === 'key') { await page.keyboard.down(a); await page.waitForTimeout(120); await page.keyboard.up(a); }
     if (op === 'tap') await page.touchscreen.tap(v.viewport.width * a, v.viewport.height * b);
+    if (op === 'click') await page.mouse.click(a, b);
     if (op === 'wait') { await page.waitForTimeout(a); continue; }
     if (op === 'shot' && shots) { mkdirSync(shots, { recursive: true }); await page.screenshot({ path: join(shots, `${v.name}-${a}.png`) }); }
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(2500);
   }
   const state = await page.evaluate(() => document.documentElement.dataset.starhermit ?? '');
   const ok = started && state !== 'error' && problems.length === 0;

@@ -1,18 +1,22 @@
 // Sound, as the browser build's js/audio.js: the authored one-shots
 // (sfx/<name>.opus, the event table of sfx/manifest.txt) on the runtime's
-// mixer, the synthesized transients (filtered-noise thocks, sine chimes) as
-// the fallback while a clip loads or if it fails, the skyline ambience loop
-// over a low-passed noise pad, and the generative pad music whose voices
-// follow the streak. Pitch variants come from the seeded AV stream, reseeded
-// per round. Every meaningful sound also emits a caption (onCaption).
+// mixer, the skyline ambience loop over a low-passed noise pad, and the
+// generative pad music whose voices follow the streak. Every meaningful
+// sound also emits a caption (onCaption).
 //
 // The browser build's four buses become the runtime's (Options › Audio owns
 // the volumes, the mute and the voice limit): music → "music", effects and
 // ambience → "effects", the input click and the voice cues (countdown, go,
 // achievement, lesson) → "interface". The old default bus levels (music 40 %,
 // effects 80 %, ambience 35 %, voice 60 %) are folded into each sound's gain.
-import { context, loadClip, play as playClip, type AudioClip, type Bus, type GainNode, type AudioBufferSourceNode, type Sound } from "starhermit:audio";
-import { RNG, type RngStream } from "./classic.ts";
+//
+// The browser build made the noise pad and the music with Web Audio nodes;
+// here both are rendered once into clips (createClip) with the same shapes,
+// and the synthesized stand-ins it played while a sample loaded are not
+// ported: the engine's browser runtime drops clip loads and plays while a
+// synthesis graph changes (the arrow-exodus port's finding). Clips load once
+// the mixer runs (natively at once, in a browser after the first press).
+import { context, createClip, loadClip, play as playClip, type AudioClip, type Bus, type Sound } from "starhermit:audio";
 
 const LEVEL = { music: 0.4, effects: 0.8, ambience: 0.35, voice: 0.6 };
 type OldBus = keyof typeof LEVEL;
@@ -24,196 +28,130 @@ const SAMPLE_BY_EVENT: Record<string, string> = {
   win: "stage-win", lose: "round-lose", undo: "drop-undo", hint: "hint-ping", count: "count-tick", go: "count-go",
   achievement: "achievement-chime", lesson: "lesson-complete", pause: "pause-hush",
 };
-// Which old bus each event's clip played through (the interface ones: the click and the voice cues).
-const CLIP_BUS: Record<string, OldBus> = { ack: "voice", count: "voice", go: "voice", achievement: "voice", lesson: "voice" };
+// The interface bus: the input click and the voice cues.
+const VOICE = new Set(["ack", "count", "go", "achievement", "lesson"]);
+const CAPTION: Record<string, string> = {
+  place: "slab placed", perfect: "perfect placement", trim: "overhang trimmed", miss: "slab missed",
+  win: "stage complete", lose: "round over", undo: "drop undone", hint: "perfect window marked", go: "go",
+  lesson: "lesson complete",
+};
 const clips = new Map<string, AudioClip>();
-let ambienceClip: AudioClip | null = null;
-let avRng: RngStream = RNG.derive(1, RNG.STREAM_AV);
 let onCaption: ((text: string) => void) | null = null;
 let captionsOn = true;
 
-/** Loads every clip at the start (a browser hands them to its mixer at the
- * player's first press); one that fails keeps its synthesized fallback. */
-export function loadSfx(): void {
-  for (const name of new Set(Object.values(SAMPLE_BY_EVENT))) {
-    loadClip(`sfx/${name}.opus`).then((c) => { clips.set(name, c); }, (e: unknown) => console.warn(`sfx ${name}: ${String(e)}`));
-  }
-  loadClip("sfx/ambience-skyline.opus").then((c) => { ambienceClip = c; startAmbienceSample(); }, () => { /* keep the pad */ });
+let wantClips = false;
+function load(name: string): void {
+  loadClip(`sfx/${name}.opus`).then((c) => { clips.set(name, c); }, (e: unknown) => console.warn(`sfx ${name}: ${String(e)}`));
 }
+/** Asks for the clips; they load once the mixer runs (see update). */
+export function loadSfx(): void { wantClips = true; }
 
-export function setSeed(seed: number): void { avRng = RNG.derive(seed >>> 0, RNG.STREAM_AV); }
 export function setCaptions(on: boolean): void { captionsOn = on; }
 export function setOnCaption(cb: (text: string) => void): void { onCaption = cb; }
 function caption(text: string): void { if (captionsOn && onCaption && text) onCaption(text); }
 
-function playSample(name: string, bus: OldBus): boolean {
-  const clip = clips.get(name);
-  if (!clip) return false;
-  try { playClip(clip, { bus: BUS[bus], gain: LEVEL[bus] }); return true; }
-  catch { clips.delete(name); return false; } // a clip the mixer lost: synthesize from now on
-}
-
-// -- synthesized transients -------------------------------------------------------
-function out(bus: OldBus, gain: number): GainNode {
-  const g = context.createGain();
-  g.gain.value = gain * LEVEL[bus];
-  g.connect(context.bus(BUS[bus]));
-  return g;
-}
-function blip(bus: OldBus, freq: number, dur: number, type: "sine" | "square" | "sawtooth" | "triangle", gain: number, slide?: number): void {
-  try {
-    const t = context.currentTime;
-    const o = context.createOscillator();
-    const g = out(bus, 1);
-    o.type = type;
-    o.frequency.setValueAtTime(freq, t);
-    if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, slide), t + dur);
-    g.gain.setValueAtTime(gain * LEVEL[bus], t);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.connect(g);
-    o.start(t);
-    o.stop(t + dur + 0.02);
-    o.onended = () => { g.release(); };
-  } catch { /* the graph is full: stay silent */ }
-}
-function thock(bus: OldBus, dur: number, gain: number, cutoff: number): void {
-  try {
-    const len = Math.max(1, Math.floor(context.sampleRate * dur));
-    const buf = context.createBuffer(1, len, context.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < len; i++) d[i] = (avRng.next() * 2 - 1) * (1 - i / len);
-    buf.copyToChannel(d, 0);
-    const src = context.createBufferSource();
-    src.buffer = buf;
-    const f = context.createBiquadFilter();
-    f.type = "lowpass";
-    f.frequency.value = cutoff;
-    const g = out(bus, gain);
-    src.connect(f).connect(g);
-    src.start();
-    src.onended = () => { f.release(); g.release(); };
-  } catch { /* stay silent */ }
-}
-function chime(freqs: number[], bus: OldBus, gain: number): void {
-  freqs.forEach((fq, i) => { setTimeout(() => blip(bus, fq, 0.35, "sine", gain), i * 70); });
-}
-
-// -- event mapping ------------------------------------------------------------------
-/** Plays an event's clip (else its synthesized fallback) and emits its caption. */
+/** Plays an event's clip and emits its caption. */
 export function event(name: string, detail?: string | number): void {
-  const sample = SAMPLE_BY_EVENT[name];
-  const sampled = sample ? playSample(sample, CLIP_BUS[name] ?? "effects") : false;
-  switch (name) {
-    case "ack":
-      if (!sampled) blip("voice", 660 + avRng.next() * 60, 0.06, "triangle", 0.15);
-      break;
-    case "place":
-      if (!sampled) { thock("effects", 0.12, 0.5, 700 + avRng.next() * 300); blip("effects", 180, 0.12, "sine", 0.3, 90); }
-      caption("slab placed");
-      break;
-    case "perfect":
-      if (!sampled) { thock("effects", 0.1, 0.4, 900); chime([880, 1174, 1568], "effects", 0.16); }
-      caption("perfect placement");
-      break;
-    case "trim":
-      if (!sampled) thock("effects", 0.2, 0.35, 500);
-      caption("overhang trimmed");
-      break;
-    case "miss":
-      if (!sampled) blip("effects", 220, 0.4, "sawtooth", 0.2, 60);
-      caption("slab missed");
-      break;
-    case "win":
-      if (!sampled) chime([523, 659, 784, 1046, 1318], "music", 0.22);
-      caption("stage complete");
-      break;
-    case "lose":
-      if (!sampled) chime([392, 311, 233], "music", 0.2);
-      caption("round over");
-      break;
-    case "undo":
-      if (!sampled) blip("effects", 500, 0.12, "sine", 0.2, 750);
-      caption("drop undone");
-      break;
-    case "hint":
-      if (!sampled) blip("effects", 1046, 0.15, "sine", 0.14);
-      caption("perfect window marked");
-      break;
-    case "count":
-      if (!sampled) blip("voice", 440, 0.12, "square", 0.12);
-      caption(String(detail ?? ""));
-      break;
-    case "go":
-      if (!sampled) blip("voice", 880, 0.25, "square", 0.14);
-      caption("go");
-      break;
-    case "achievement":
-      if (!sampled) chime([784, 988, 1175], "voice", 0.18);
-      caption(`achievement: ${detail ?? ""}`);
-      break;
-    case "lesson":
-      if (!sampled) chime([523, 659, 784], "voice", 0.16);
-      caption("lesson complete");
-      break;
-    case "pause":
-      if (!sampled) blip("effects", 300, 0.1, "sine", 0.12, 200);
-      break;
+  const file = SAMPLE_BY_EVENT[name];
+  const clip = file ? clips.get(file) : undefined;
+  if (clip) {
+    const bus: OldBus = VOICE.has(name) ? "voice" : "effects";
+    try { playClip(clip, { bus: BUS[bus], gain: LEVEL[bus] }); }
+    catch { clips.delete(file!); load(file!); } // a clip the mixer lost: load it again
+  }
+  if (name === "count") caption(String(detail ?? ""));
+  else if (name === "achievement") caption(`achievement: ${detail ?? ""}`);
+  else caption(CAPTION[name] ?? "");
+}
+
+// -- rendered beds ------------------------------------------------------------------------
+const RATE = 11025;
+/** RBJ biquad lowpass over `x` in place (Web Audio's BiquadFilterNode, Q 1). */
+function lowpass(x: Float32Array, freq: number, q = 1): void {
+  const w = (2 * Math.PI * freq) / RATE, alpha = Math.sin(w) / (2 * q), c = Math.cos(w);
+  const a0 = 1 + alpha;
+  const b0 = (1 - c) / 2 / a0, b1 = (1 - c) / a0, b2 = b0, a1 = (-2 * c) / a0, a2 = (1 - alpha) / a0;
+  let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+  for (let i = 0; i < x.length; i++) {
+    const x0 = x[i]!;
+    const y0 = b0 * x0 + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+    x2 = x1; x1 = x0; y2 = y1; y1 = y0;
+    x[i] = y0;
   }
 }
+/** The pad under the ambience: white noise (±0.3) lowpassed at 240 Hz, a seamless 2 s loop. */
+function padClip(): AudioClip {
+  const n = 2 * RATE, fade = Math.round(0.25 * RATE);
+  const raw = new Float32Array(n + fade);
+  let seed = 7;
+  for (let i = 0; i < raw.length; i++) {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    raw[i] = ((seed / 0x7fffffff) * 2 - 1) * 0.3;
+  }
+  lowpass(raw, 240);
+  const out = raw.slice(0, n);
+  for (let i = 0; i < fade; i++) { const k = i / fade; out[i] = raw[n + i]! * (1 - k) + raw[i]! * k; }
+  return createClip([out], RATE);
+}
+/** One music voice: a sine falling exponentially to silence over 1.6 s (gain 1; scaled when played). */
+function noteClip(freq: number): AudioClip {
+  const n = Math.round(1.62 * RATE);
+  const out = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const t = i / RATE;
+    out[i] = Math.sin(2 * Math.PI * freq * t) * Math.pow(0.0001, Math.min(1, t / 1.6));
+  }
+  return createClip([out], RATE);
+}
 
-// -- ambience: a quiet filtered-noise pad, then the authored skyline loop ----------------
-let pad: { src: AudioBufferSourceNode; gain: GainNode } | null = null;
-let skylineLoop: Sound | null = null;
 let started = false;
-function startAmbience(): void {
-  if (pad) return;
-  try {
-    const src = context.createBufferSource();
-    src.buffer = context.createNoiseBuffer(2, "white");
-    src.loop = true;
-    const f = context.createBiquadFilter();
-    f.type = "lowpass";
-    f.frequency.value = 240;
-    const g = out("ambience", 0.6 * 0.3);
-    src.connect(f).connect(g);
-    src.start();
-    pad = { src, gain: g };
-  } catch (e) { console.warn(`ambience: ${String(e)}`); }
-  startAmbienceSample();
-}
-/** The authored loop fades in over the pad once decoded; if it fails the pad stays. */
-function startAmbienceSample(): void {
-  if (!started || !ambienceClip || skylineLoop) return;
-  try {
-    skylineLoop = playClip(ambienceClip, { bus: BUS.ambience, gain: 0, loop: true });
-    skylineLoop.fade(0.9 * LEVEL.ambience, 1.5);
-    if (pad) pad.gain.gain.linearRampToValueAtTime(0, context.currentTime + 1.5);
-  } catch { skylineLoop = null; }
-}
-
-// -- adaptive music: a slow pad, voices follow the streak ---------------------------------
+let ambience = 0; // 0 nothing yet, 1 the pad, 2 the authored loop too
+let pad: Sound | null = null;
+let skyline: Sound | null = null;
+let skylineClip: AudioClip | null = null;
 const MUS_SCALE = [261.6, 311.1, 392.0, 466.2, 523.3];
+const notes: AudioClip[] = [];
 let musicIntensity = 0;
 let musicStep = 0;
 let nextNote = 0;
 export function setMusicIntensity(streak: number): void { musicIntensity = Math.max(0, Math.min(4, streak | 0)); }
 
 /** The beds start with the first gesture (the browser build's audio unlock). */
-export function unlock(): void {
-  if (started) return;
-  started = true;
-  startAmbience();
-}
+export function unlock(): void { started = true; }
 
-/** Each frame: the pad's next notes every 1.4 s of mixer time. */
+/** Each frame: what waited for the mixer, one rendered clip a frame, then
+ * the pad music's next voices every 1.4 s of mixer time. */
 export function update(): void {
-  if (!started || context.state !== "running") return;
+  if (context.state !== "running") return;
+  if (wantClips) {
+    wantClips = false;
+    for (const name of new Set(Object.values(SAMPLE_BY_EVENT))) load(name);
+    loadClip("sfx/ambience-skyline.opus").then((c) => { skylineClip = c; }, () => { /* keep the pad */ });
+    return;
+  }
+  if (!started) return;
+  try {
+    if (ambience === 0) {
+      ambience = 1;
+      pad = playClip(padClip(), { bus: BUS.ambience, gain: 0.6 * LEVEL.ambience, loop: true });
+      return;
+    }
+    if (ambience === 1 && skylineClip) {
+      // The authored loop fades in over 1.5 s and the pad out.
+      ambience = 2;
+      skyline = playClip(skylineClip, { bus: BUS.ambience, gain: 0, loop: true });
+      skyline.fade(0.9 * LEVEL.ambience, 1.5);
+      pad?.fade(0, 1.5);
+      return;
+    }
+    if (notes.length < MUS_SCALE.length) { notes.push(noteClip(MUS_SCALE[notes.length]!)); return; }
+  } catch (e) { console.warn(`beds: ${String(e)}`); return; }
   const now = context.currentTime;
   if (now < nextNote) return;
   nextNote = now + 1.4;
   const n = 1 + Math.min(3, musicIntensity);
   for (let i = 0; i < n; i++) {
-    blip("music", MUS_SCALE[(musicStep + i * 2) % MUS_SCALE.length]!, 1.6, "sine", 0.05 + 0.02 * musicIntensity);
+    try { playClip(notes[(musicStep + i * 2) % notes.length]!, { bus: BUS.music, gain: (0.05 + 0.02 * musicIntensity) * LEVEL.music }); } catch { /* the mixer is full */ }
   }
   musicStep++;
 }

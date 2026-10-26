@@ -18,7 +18,7 @@ import { Rules, Session, type Cfg } from "./classic.ts";
 import { t } from "./i18n.ts";
 import * as platform from "./platform.ts";
 import {
-  SETUP_PAGE_SIZE, achievementName, app, back, canHint, canUndo, commitStart, doDrop, doHint, doUndo, fillSetup,
+  SETUP_PAGE_MAX, achievementName, app, back, canHint, canUndo, commitStart, doDrop, doHint, doUndo, fillSetup,
   journeyDone, keyName, leaveRound, lessonTitle, nextJourneyLevel, openBoards, openHelp, openModes, openSettings,
   openSetup, pauseGame, replayTutorial, restartRound, resultsHeadline, resumeGame, setupHeading, setupInfo, showScreen,
   stageName, toast, today, type ScreenName,
@@ -136,18 +136,31 @@ function drawBackdrop(): void {
 }
 
 // ------------------------------------------------------------------ the frame
-const FIRST: Partial<Record<ScreenName, string>> = {
-  title: "btn-play", "mode-select": "card-journey", paused: "btn-resume", results: "btn-retry",
-  settings: "set-captions", help: "btn-help-back", board: "btn-board-back",
-};
+// The first control of each screen, by label: ui.setFocus takes the widget's
+// label (an ui.id() name does not match; engine 1.13.2).
+function firstLabel(name: ScreenName): string | null {
+  switch (name) {
+    case "title": return t("play");
+    case "mode-select": return t("mode.journey");
+    case "setup": {
+      const page = app.setupItems.slice(app.setupPage * app.setupPageSize, (app.setupPage + 1) * app.setupPageSize);
+      const item = page.find((it) => it.current && it.unlocked) ?? page.find((it) => it.unlocked);
+      return item ? item.label : app.pendingSetup ? t("start") : t("back");
+    }
+    case "paused": return t("resume");
+    case "results": return t("retry");
+    case "settings": return t("set.captions");
+    case "help": case "board": return t("back");
+  }
+}
 
 export function drawScreens(): void {
   const L = layoutNow();
   const r = Session.round;
-  if (app.focusNext && app.screen) {
-    const first = app.screen === "setup"
-      ? (app.setupItems.length ? `setup-${Math.max(0, app.setupItems.findIndex((it) => it.current && it.unlocked) - app.setupPage * SETUP_PAGE_SIZE)}` : "btn-start")
-      : FIRST[app.screen];
+  // A screen that just opened focuses its first control once its layout has
+  // settled (a tall screen moves into its scroll area on its second frame).
+  if (app.focusNext && app.screen && frame().frame - app.openedFrame >= 2) {
+    const first = firstLabel(app.screen);
     if (first) ui.setFocus(first);
     app.focusNext = null;
   }
@@ -349,15 +362,25 @@ function setupScreen(L: Layout): void {
   // Keep the list's text in the current language (and the stars current).
   fillSetup(mode);
   const items = app.setupItems;
-  const pages = Math.max(1, Math.ceil(items.length / SETUP_PAGE_SIZE));
+  // As many rows as fit with the heading, the info panel, the pager and the
+  // buttons (the browser build's list scrolled inside 50 % of the window).
+  const fixed = 44 + (lastHeight.get("setup-info") ?? 60) + 62 + 66 + 16 * 4;
+  const size = Math.max(3, Math.min(SETUP_PAGE_MAX, Math.floor((L.lh - 32 - fixed) / 48)));
+  if (size !== app.setupPageSize) {
+    app.setupPage = Math.floor((app.setupPage * app.setupPageSize) / size);
+    app.setupPageSize = size;
+  }
+  const PAGE = app.setupPageSize;
+  const pages = Math.max(1, Math.ceil(items.length / PAGE));
   app.setupPage = Math.min(Math.max(app.setupPage, 0), pages - 1);
   screen("setup", "screen", L, (w) => {
     ui.style("screen-title").heading(setupHeading(mode));
-    ui.column("setup-info", () => { para(setupInfo(mode), w - 34, undefined, "setup-info-text"); }, { style: "panel", width: w });
+    const info = ui.column("setup-info", () => { para(setupInfo(mode), w - 34, undefined, "setup-info-text"); }, { style: "panel", width: w });
+    lastHeight.set("setup-info", info.height / L.sc);
     if (items.length) {
       const listW = Math.min(w, 560);
       ui.column("setup-list", () => {
-        items.slice(app.setupPage * SETUP_PAGE_SIZE, (app.setupPage + 1) * SETUP_PAGE_SIZE).forEach((item, i) => {
+        items.slice(app.setupPage * PAGE, (app.setupPage + 1) * PAGE).forEach((item, i) => {
           const inner = listW - 32;
           const right = item.right;
           const rw = right ? labelWidth(right, "stars") + 12 : 0;

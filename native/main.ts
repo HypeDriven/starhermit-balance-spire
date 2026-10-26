@@ -38,6 +38,7 @@ export const app = {
   setupMode: "" as string,
   setupItems: [] as SetupItem[],
   setupPage: 0,
+  setupPageSize: 8,
   pendingSetup: null as { mode: string; cfg: Cfg } | null,
   results: null as (Results & { localRank: { rank: number; total: number } | null; lb: LbLine | null }) | null,
   boardDate: "",
@@ -48,7 +49,8 @@ export const app = {
   signedOut: false,
   focusNext: null as string | null,
 };
-export const SETUP_PAGE_SIZE = 8;
+/** Stages a setup page lists: 8, fewer on a short window (screens.ts sets it) so nothing scrolls. */
+export const SETUP_PAGE_MAX = 8;
 
 // ------------------------------------------------------------------ the clock
 let steps = 0;
@@ -165,7 +167,7 @@ export function fillSetup(mode: string, fresh = false): void {
   app.setupItems = list;
   if (fresh) {
     const cur = list.findIndex((item) => item.current);
-    app.setupPage = cur > 0 ? Math.floor(cur / SETUP_PAGE_SIZE) : 0;
+    app.setupPage = cur > 0 ? Math.floor(cur / app.setupPageSize) : 0;
   }
 }
 export function setupHeading(mode: string): string {
@@ -189,7 +191,6 @@ function themeFor(cfg: Cfg): { palette: Record<string, number> } {
 
 export function commitStart(setup: { mode: string; cfg: Cfg; lesson?: Lesson | null }): void {
   audio.unlock();
-  audio.setSeed(setup.cfg.seed);
   Session.startRound(setup.cfg, { mode: setup.mode, lesson: setup.lesson ?? null });
   render.setTheme(themeFor(setup.cfg).palette, RNG.derive(setup.cfg.seed, RNG.STREAM_DECOR));
   Session.startCountdown();
