@@ -9,7 +9,7 @@ Balance Spire is a one-input timing game: a luminous stone slab slides back and 
 | Pitch | Drop sliding slabs dead-centre to raise a glowing stone spire; every miss narrows the next landing. |
 | Genre | Timing / stacking, single player, asynchronous ranked comparison. |
 | Session | 1–3 minutes per journey stage; 2–6 minutes for a daily, challenge or endless run. |
-| Platforms | A StarHermit engine script game (engine 1.16.3, host API 1.18, `engine.minor=14`): natively in the StarHermit client and in desktop and mobile browsers on the engine's web runtime, from one package. |
+| Platforms | A StarHermit engine script game (engine 1.16.4, host API 1.18, `engine.minor=14`): natively in the StarHermit client and in desktop and mobile browsers on the engine's web runtime, from one package. |
 | Rendering | `starhermit:scene` (the three.js model) for the spire, `starhermit:ui` for the HUD, tray and screens, `starhermit:draw` for the title's key art. |
 | Determinism | Integer milli-units, 60 ticks/s, closed-form slab motion, seeded PRNG; the round clock is the runtime's fixed steps; every ranked run keeps a replayable command log. |
 
