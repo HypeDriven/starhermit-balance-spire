@@ -7,9 +7,8 @@
 // mutates rules state.
 //
 // What changed from three.js, and why:
-// - RoundedBoxGeometry (an addon) is rounded.ts; RoomEnvironment +
-//   PMREMGenerator.fromScene (not available) is a latitude-longitude room
-//   image prefiltered with fromEquirectangular.
+// - RoundedBoxGeometry (an addon) is rounded.ts. r160 scaled scene.environment
+//   by material.envMapIntensity: the stones and ground carry the room as envMap.
 // - The EffectComposer chain (GTAO, UnrealBloom, OutputPass, the grade
 //   ShaderPass, SMAA / FXAA / canvas MSAA) is renderer.ao / bloom / grade /
 //   antialias; the grade's GLSL is the built-in display-space grade with the
@@ -22,19 +21,18 @@
 //   of one InstancedMesh along the slab's edges.
 // - The skyline's per-face material array (lit windows on the sides only) is
 //   one material whose WGSL surface hook drops the windows on roofs.
-// - The key light's fitted orthographic shadow box is the engine's
-//   view-based directional shadow (`shadow.distance`).
-// - Light intensities are three.js r160's divided by π (the engine's
-//   convention). The window texture is a DataTexture (sRGB bytes, as the
+// - Lights and the fitted shadow box are the page's own values (minor 28).
+//   The window texture is a DataTexture (sRGB bytes, as the
 //   CanvasTexture with SRGBColorSpace was).
 import {
   ACESFilmicToneMapping, AdditiveBlending, BackSide, BoxGeometry, BufferAttribute, BufferGeometry, Color,
-  CylinderGeometry, DataTexture, DirectionalLight, FloatType, Fog, Group, HemisphereLight, InstancedMesh,
+  CylinderGeometry, DataTexture, DirectionalLight, Fog, Group, HemisphereLight, InstancedMesh,
   Matrix4, Mesh, MeshBasicMaterial, MeshLambertMaterial, MeshPhysicalMaterial, MeshStandardMaterial,
-  PMREMGenerator, PerspectiveCamera, PlaneGeometry, Points, PointsMaterial, RGBAFormat, RepeatWrapping,
+  PCFSoftShadowMap, PMREMGenerator, PerspectiveCamera, RoomEnvironment, PlaneGeometry, Points, PointsMaterial, RepeatWrapping,
   SRGBColorSpace, ShaderMaterial, SphereGeometry, TextureLoader, TorusGeometry, Vector3, renderer, scene,
 } from "starhermit:scene";
 import type { Material, MaterialHooks, Texture } from "starhermit:scene";
+import { frame as engineFrame } from "starhermit:engine";
 import { Rules, type RngStream, type RulesEvent, type State } from "./classic.ts";
 import { MOTE_MAX, STAR_MAX, moteCount, starCount, type Look } from "./quality.ts";
 import { roundedBox } from "./rounded.ts";
@@ -46,8 +44,6 @@ const SLAB_H = 0.42; // world units per slab level
 const FRAMING = { dist: 13.5, rise: 6.2, lookDrop: 0.9 }; // authored framing constants
 const KEY_DIR = new Vector3(6, 12, 4).normalize();
 const PI = Math.PI;
-/** The hand-built room's brightness against three.js's RoomEnvironment (as timber-grid matched it). */
-const ENV_INTENSITY = 0.3;
 
 const camera = new PerspectiveCamera(38, 16 / 9, 0.1, 220);
 let look: Look | null = null;
@@ -73,14 +69,24 @@ function mulberry(seed: number): () => number {
 }
 
 // --- lights ----------------------------------------------------------------------
-const hemi = new HemisphereLight(0xbfd0e0, 0x3a3450, 0.95 / PI);
-const keyLight = new DirectionalLight(0xffe0b0, 1.5 / PI);
+const hemi = new HemisphereLight(0xbfd0e0, 0x3a3450, 0.95);
+const keyLight = new DirectionalLight(0xffe0b0, 1.5);
 keyLight.shadow.bias = -0.0004;
-keyLight.shadow.normalBias = 1;
-keyLight.shadow.radius = 2; // PCFSoftShadowMap's soft edge
-keyLight.shadow.distance = 40;
+keyLight.shadow.normalBias = 0.02;
+let shadowLevel = -1;
+/** The page's key-light shadow box fitted to the tower (base to moving slab) and the plinth near it. */
+function fitShadow(level: number): void {
+  shadowLevel = level;
+  const top = level * SLAB_H + 1;
+  const ext = Math.max(4.5, top * 0.55 + 2.5);
+  keyLight.target.position.set(0, top * 0.5, 0);
+  keyLight.position.copy(KEY_DIR).multiplyScalar(ext + 20).add(keyLight.target.position);
+  const sc = keyLight.shadow.camera;
+  Object.assign(sc, { left: -ext, right: ext, top: ext, bottom: -ext, near: 1, far: ext * 2 + 40 });
+  sc.updateProjectionMatrix();
+}
 // Cool rim light from behind separates slab silhouettes from the sky.
-const rimLight = new DirectionalLight(0x9fc8ff, 0.55 / PI);
+const rimLight = new DirectionalLight(0x9fc8ff, 0.55);
 rimLight.position.set(-7, 6, -9);
 
 // --- stone -------------------------------------------------------------------------
@@ -324,35 +330,21 @@ stars.frustumCulled = motes.frustumCulled = false;
 
 // --- environment ---------------------------------------------------------------------
 let envTex: Texture | null = null;
-/** A neutral room (three.js RoomEnvironment's role): a dim interior with bright
- * soft boxes above and to the sides, as linear light, prefiltered once. */
+/** The page's RoomEnvironment(renderer) through PMREM (sigma 0.04), made once. */
 function buildEnvironment(): void {
   if (envTex) return;
-  const w = 128, h = 64;
-  const px = new Float32Array(w * h * 4);
-  const boxes: [number, number, number, number, number][] = [
-    [0, 1.25, 0.9, 0.18, 9], [PI, 1.25, 0.9, 0.18, 7], [PI / 2, 0.35, 0.35, 0.3, 6],
-    [-PI / 2, 0.35, 0.35, 0.3, 5], [PI * 0.25, 0.7, 0.25, 0.15, 4], [-PI * 0.75, 0.7, 0.25, 0.15, 4],
-  ];
-  for (let row = 0; row < h; row++) {
-    const lat = (0.5 - (row + 0.5) / h) * PI;
-    for (let c = 0; c < w; c++) {
-      const lon = ((c + 0.5) / w - 0.5) * 2 * PI;
-      let v = lat > 0 ? 0.32 + 0.12 * Math.sin(lat) : 0.18 + 0.06 * Math.cos(lat);
-      for (const [bl, bt, hw, hh, k] of boxes) {
-        let dl = Math.abs(lon - bl);
-        if (dl > PI) dl = 2 * PI - dl;
-        if (dl < hw && Math.abs(lat - bt) < hh) v = k;
-      }
-      const o = (row * w + c) * 4;
-      px[o] = v; px[o + 1] = v; px[o + 2] = v; px[o + 3] = 1;
-    }
-  }
   try {
-    envTex = new PMREMGenerator().fromEquirectangular(new DataTexture(px, w, h, RGBAFormat, FloatType)).texture;
+    envTex = new PMREMGenerator(renderer).fromScene(new RoomEnvironment(renderer), 0.04).texture;
   } catch (e) {
     console.warn("environment:", e instanceof Error ? e.message : String(e));
   }
+}
+/** three r160 scaled scene.environment by each material's envMapIntensity; the
+ * engine follows r163+, so the stones and the ground take the room as their own envMap. */
+function applyEnvMaps(): void {
+  const env = look?.reflections ? envTex : null;
+  const mats: Material[] = [groundMat, ...stones.map((st) => st.mesh.material as Material)];
+  for (const m of mats) if (m instanceof MeshStandardMaterial) m.envMap = env;
 }
 
 // --- building ------------------------------------------------------------------------
@@ -364,6 +356,7 @@ function build(): void {
   movingSlab.visible = false;
   scene.add(movingSlab);
   renderer.camera = camera;
+  renderer.shadowMap.type = PCFSoftShadowMap;
   renderer.toneMapping = ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
   new TextureLoader().loadAsync("assets/slab-stone.webp").then((tex) => {
@@ -388,13 +381,13 @@ export function applyLook(next: Look): void {
   if (next.reflections) {
     buildEnvironment();
     scene.environment = envTex;
-    scene.environmentIntensity = ENV_INTENSITY;
-    hemi.intensity = 0.6 / PI;
+    hemi.intensity = 0.6;
   } else {
     scene.environment = null;
-    hemi.intensity = 0.95 / PI;
+    hemi.intensity = 0.95;
   }
   refreshStone();
+  applyEnvMaps();
   applyBackground();
   if (skylineKey !== `${next.detailed}:${next.budget.skyline}`) buildSkyline();
   stars.geometry.setDrawRange(0, starCount(next));
@@ -517,8 +510,7 @@ export function syncState(state: State, alpha: number): void {
   }
   // Camera: rise with the tower via the critically damped spring.
   camTargetY = 2.4 + Math.max(0, level - 4) * SLAB_H;
-  keyLight.target.position.set(0, (level * SLAB_H + 1) * 0.5, 0);
-  keyLight.position.copy(KEY_DIR).multiplyScalar(30).add(keyLight.target.position);
+  if (level !== shadowLevel) fitShadow(level);
 }
 
 /** No round: hide the round's objects (the title, the menus). */
@@ -613,6 +605,12 @@ export function frame(dtRaw: number): void {
     sx = Math.sin(shakeT * 1.3) * shakeAmp;
     sz = Math.cos(shakeT * 1.7) * shakeAmp;
     shakeAmp *= Math.pow(0.02, dt); // fast decay
+  }
+  // Minor 20+: the camera keeps its own aspect (three's resize set it).
+  const fr = engineFrame();
+  if (fr.width > 0 && fr.height > 0 && Math.abs(camera.aspect - fr.width / fr.height) > 1e-6) {
+    camera.aspect = fr.width / fr.height;
+    camera.updateProjectionMatrix();
   }
   camera.position.set(sx, camY + FRAMING.rise, FRAMING.dist + sz);
   camera.lookAt(0, camY - FRAMING.lookDrop, 0);
