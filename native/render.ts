@@ -401,7 +401,8 @@ export function applyLook(next: Look): void {
     denoise: { lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: next.ao === "high" ? 6 : 4, rings: 2, samples: next.ao === "high" ? 16 : 8, radiusExponent: 2 },
   };
   // High threshold: only the emissive moving slab, perfect glows and the rim inlay bloom.
-  renderer.bloom = next.bloom ? { strength: 0.32, radius: 0.4, threshold: 0.92, resolution: next.budget.bloomRes } : null;
+  // the page's r160 UnrealBloomPass strength 0.32, squared for the r185 bloom at minor 29
+  renderer.bloom = next.bloom ? { strength: 0.1, radius: 0.4, threshold: 0.92, resolution: next.budget.bloomRes } : null;
   // The browser build's grade ShaderPass after OutputPass: a gentle S-curve
   // (0.18 of c²(3−2c), a slope of about 1.09 at mid grey), saturation 1.1,
   // cool shadows / warm highlights, and the vignette.
