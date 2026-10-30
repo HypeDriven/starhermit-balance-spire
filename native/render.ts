@@ -334,7 +334,7 @@ let envTex: Texture | null = null;
 function buildEnvironment(): void {
   if (envTex) return;
   try {
-    envTex = new PMREMGenerator(renderer).fromScene(new RoomEnvironment(renderer), 0.04).texture;
+    const envRoom = new RoomEnvironment(renderer); envRoom.position.y = 0; /* the page's three (pre-r183) builds the room at the origin */ envTex = new PMREMGenerator(renderer).fromScene(envRoom, 0.04).texture;
   } catch (e) {
     console.warn("environment:", e instanceof Error ? e.message : String(e));
   }

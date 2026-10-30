@@ -7,7 +7,7 @@
     "cover.jpg": {"sha256": "c954c4fd43aaab6f639b86e0d7e1e6947754da76832a4abf95ed8795ef62233b", "size": 87658},
     "coverart.png": {"sha256": "3fea5c4dabbb8e8a39aae9585f9f0d00189fdaf57d4e014e52df74952f484a5f", "size": 157859},
     "icon.png": {"sha256": "a5609adb2187a995d40b4dedf7856c7f4d6a04f5d29d9d0b6ad27c74fc64205e", "size": 4755},
-    "index.html": {"sha256": "3ce033ec59ecc28833fe86213489e477f55fc79576ce0d079811b97ad96e3dac", "size": 1778},
+    "index.html": {"sha256": "23923db9c32ccb64ecfadbe2b1f3e8a4a421d28199cc2bc71523679ca9375034", "size": 1778},
     "js/content.js": {"sha256": "7195db01eb265d2acc2a34102a947ef6117d1f1eff40414518d44a3032c1a45d", "size": 16056},
     "js/i18n.js": {"sha256": "2e36f8f33bedabceaa6c4f0b6b29d7a342fba5f3881adfedba30b82ad9510758", "size": 86031},
     "js/migrate.js": {"sha256": "453ab7eb61b03dec7d0d00aa026df1e8527aa342d50a88f61f727a29dbba1aae", "size": 2911},
@@ -20,7 +20,7 @@
     "native/main.ts": {"sha256": "9ecfa7ee5850cae6009ca93ca7ece8fc38497148be4f81d7272b4c293c50e0b1", "size": 20962},
     "native/platform.ts": {"sha256": "8e13e5a08b0a00503344e9dc69c5f80a5d15e01e6ef91803eca9fbdfff1141bb", "size": 11993},
     "native/quality.ts": {"sha256": "e3ccecde93173c31c93d65052a03c3bcf3482c105304616413890dfd00627265", "size": 4471},
-    "native/render.ts": {"sha256": "6331af44c1748edf925c849b9ca2e3674438ac09c7ba897ab95baff14f811c4d", "size": 29459},
+    "native/render.ts": {"sha256": "280f755d270cf44e7d8f40affd35cc79de483ce404f6ff4b5cd07f69375918b3", "size": 29572},
     "native/rounded.ts": {"sha256": "b648c94b5cfbde809c5bc653b11a109224e4cfb698ceb227eb13081193189b89", "size": 4049},
     "native/screens.ts": {"sha256": "1abf5c93690b39584dbdc7ba5d23ee491a02fdebd74399923071e87a0379c5ec", "size": 29746},
     "native/style.ts": {"sha256": "0a3e8141d7a7a0143cf3f36f22ca68aecd3fb0bf2cc9c4a59b4265cb5f9a9d51", "size": 1501},
@@ -43,8 +43,8 @@
     "sfx/slab-place.opus": {"sha256": "c12ff3d3b2de27b3809db7444521678b5ebb3fd94d33a1c1edae50f9801a6dc0", "size": 15301},
     "sfx/stage-win.opus": {"sha256": "d0c06091bfa34d98fa20bf531b347bc6a09d698ea2dc3dff090913d650322902", "size": 40205},
     "sfx/ui-ack.opus": {"sha256": "1ec3f4b6c4d2273dd89e58b62ae6a50a36aea90be269407000f7f1e0822b1f5e", "size": 11671},
-    "spec.md": {"sha256": "97b69e105cda773cd69eac3076e1731125ad32ef23e093341148e7745ee37483", "size": 38074},
-    "starhermit.txt": {"sha256": "44aa690b39f7786235a8f54487abdc9e25c13cba9ec63df7ad00b444f29bd552", "size": 1265}
+    "spec.md": {"sha256": "9cbcb62e02e42d327d48aedb4634302b64adb6b07b889bdc5df1ba2e87a7dc6c", "size": 38074},
+    "starhermit.txt": {"sha256": "2125302887770667a0c68f3a80c4fe0a9d669e7d713b41e44ae28835956b2fe5", "size": 1265}
   },
   "excluded": ["data/", "node_modules/", "package-lock.json", "package.json", "server.js", "test-results/", "tests/", "tools/", "tsconfig.json"],
   "format": 1
