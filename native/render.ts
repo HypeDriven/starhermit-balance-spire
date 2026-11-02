@@ -648,7 +648,7 @@ export function frame(dtRaw: number): void {
       const a = animate ? 1 - 0.55 * (0.5 + 0.5 * Math.sin(time * (1.2 + ph * 2) + ph * 40)) : 1;
       starColor[i * 3] = starColor[i * 3 + 1] = starColor[i * 3 + 2] = a;
     }
-    const attr = starGeo.getAttribute("color")!;
+    const attr = (starGeo.getAttribute("color") as BufferAttribute);
     attr.array = starColor;
     attr.needsUpdate = true;
   }
@@ -661,7 +661,7 @@ export function frame(dtRaw: number): void {
       motePos[i * 3 + 1] = camY + (y0 % 9) - 4.5;
       motePos[i * 3 + 2] = moteBase[i * 3 + 2]!;
     }
-    const attr = moteGeo.getAttribute("position")!;
+    const attr = (moteGeo.getAttribute("position") as BufferAttribute);
     attr.array = motePos;
     attr.needsUpdate = true;
   }
