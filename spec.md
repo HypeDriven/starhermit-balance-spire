@@ -23,7 +23,7 @@ File map (all in the package unless marked dev; `.starhermitignore` leaves out `
 | `native/classic.ts` | Loads the pure scripts below with `loadClassic` (after a `localStorage` shim over `starhermit:storage`) and types their globals. |
 | `native/screens.ts` | Every screen, the HUD, tray, countdown, caption and toast as `starhermit:ui`, the title key art. |
 | `native/render.ts` | The spire on `starhermit:scene` (tower, moving slab and outline, ghost marker, hint band, debris, sky dome in WGSL, skyline, stars, motes, camera spring); rounded slabs are the engine's `RoundedBoxGeometry`. |
-| `native/quality.ts` | The four presets and their budgets keyed by the runtime's quality tier and level. |
+| `native/quality.ts` | The level's engine effects (`levelSettings()`) and the four art presets and budgets keyed by its quality tier. |
 | `native/audio.ts` | Clips on the runtime's mixer, rendered ambience pad and music voices, captions. |
 | `native/platform.ts` | Engine save (progress) with the browser build's cloud save migrated, game settings with the old account keys migrated, device boards, score posting, invite link, profile names. |
 | `native/i18n.ts`, `native/style.ts` | Locale from the runtime's interface language; registers `assets/ui-style.json` and the theme. |
@@ -174,14 +174,14 @@ Layout (`native/screens.ts`, by the window's logical size in the safe area): scr
 
 **Hero.** The tower and its hovering slab, framed by a 38° perspective camera 13.5 units back and 6.2 units up, looking 0.9 units below a target that climbs `0.42` per level once the tower passes four slabs. ACES tone mapping at exposure 1.05, sRGB output, hemisphere fill (theme skyBot over `#3a3450`) and a warm theme key at intensity 1.5 casting soft shadows (the engine's view-based directional shadow, aimed at the tower's middle), a cool rim light from behind on detailed scenes, linear fog from 24 to 90 units in the theme's fog colour. Detailed scenes replace the flat sky colour with a gradient dome (skyTop above, skyBot haze at the horizon, a deep dusk tone below it, a soft glow toward the key light).
 
-**Graphics.** The runtime's Options › Graphics owns the choice (Auto or one of ten levels), render scale, pixel-ratio cap, adaptive resolution, the frame-rate limit and readout. `native/quality.ts` maps the frame's quality tier (`frame().quality`) to the browser build's four presets and their effects: key-light shadows in the browser build's fitted box (off / 1024 / 2048 / 4096, held by the runtime to the level), GTAO contact darkening (`renderer.ao`: off, on, high), bloom limited to emissive highlights (`renderer.bloom`, threshold 0.92: the moving slab, perfect-slab glows, the plinth inlay), a display-space colour grade with vignette (`renderer.grade`), FXAA / SMAA / MSAA (`renderer.antialias`), image-based lighting from three.js's `RoomEnvironment(renderer)` prefiltered by `PMREMGenerator.fromScene` (the stones and ground carry it as their envMap at the browser build's intensities), particles (off; stars and trim debris; plus rising glow motes), scene detail (plain boxes and flat sky, or the bevelled clearcoat slabs, WGSL gradient sky dome, lit skyline and rim light) and sky motion (drifting bands, twinkling stars, rising motes, a breathing glow on the moving slab; frozen by the runtime's Reduced motion). A tier change applies live.
+**Graphics.** The runtime's Options › Graphics owns the choice (Auto or one of ten levels), render scale, pixel-ratio cap, adaptive resolution, the frame-rate limit and readout. `native/quality.ts` takes the engine-owned effects from the frame's level (`levelSettings()`, the table every StarHermit game reads): key-light shadows in the browser build's fitted box at the level's shadow-map size (none at quantum), GTAO contact darkening (`renderer.ao`, the level's resolution and samples), bloom limited to emissive highlights (`renderer.bloom` at the level's resolution, threshold 0.92: the moving slab, perfect-slab glows, the plinth inlay), a display-space colour grade with vignette (`renderer.grade`) and the level's anti-aliasing (`renderer.antialias`). It maps the level's quality tier to the browser build's four presets for the art: image-based lighting from three.js's `RoomEnvironment(renderer)` prefiltered by `PMREMGenerator.fromScene` (the stones and ground carry it as their envMap at the browser build's intensities), particles (off; stars and trim debris; plus rising glow motes), scene detail (plain boxes and flat sky, or the bevelled clearcoat slabs, WGSL gradient sky dome, lit skyline and rim light) and sky motion (drifting bands, twinkling stars, rising motes, a breathing glow on the moving slab; frozen by the runtime's Reduced motion). A tier change applies live.
 
-| Preset (tier) | Slab material | Slab mesh | Skyline buildings | Stars (low particles = 40 %) | Motes | Debris pool | Bloom resolution |
-|---|---|---|---|---|---|---|---|
-| Low | Lambert | plain box | 16 | 250 | 0 | 4 | ½ |
-| Balanced | Standard | rounded box, 2 bevel segments | 40 | 400 | 30 | 8 | ½ |
-| High | clearcoat Physical | rounded box, 2 segments | 56 | 600 | 70 | 12 | ¾ |
-| Ultra | clearcoat Physical | rounded box, 4 segments | 96 | 1200 | 140 | 16 | full |
+| Preset (tier) | Slab material | Slab mesh | Skyline buildings | Stars (low particles = 40 %) | Motes | Debris pool |
+|---|---|---|---|---|---|---|
+| Low | Lambert | plain box | 16 | 250 | 0 | 4 |
+| Balanced | Standard | rounded box, 2 bevel segments | 40 | 400 | 30 | 8 |
+| High | clearcoat Physical | rounded box, 2 segments | 56 | 600 | 70 | 12 |
+| Ultra | clearcoat Physical | rounded box, 4 segments | 96 | 1200 | 140 | 16 |
 
 **Typography.** `system-ui`; title 4 rem (2.2 rem on phones and short landscape) in accent with a soft glow; HUD labels 0.68 rem uppercase tracked; tabular numerals for all counters; countdown numeral 9 rem (4 rem compact) weight 800.
 
@@ -189,7 +189,7 @@ Layout (`native/screens.ts`, by the window's logical size in the safe area): scr
 
 **Authored visual assets the design calls for.** Cover art (`coverart.png`), a title backdrop (`assets/title-backdrop.webp`), a limestone grain for slabs (`assets/slab-stone.webp`), the PNG icon. No character art and no 3D model: the hero prop is procedural geometry by design.
 
-Star and mote counts grow within the tier by the level (`frame().levelIndex`, ×1.64 a level above the tier's first, at most twice). Gameplay is identical on every level.
+Star and mote counts grow within the tier with the level's particle budget against the tier's anchor level (quantum, molecular, terrestrial, galactic; at most twice). Gameplay is identical on every level.
 
 ## 9. Audio direction
 

@@ -375,6 +375,7 @@ export function applyLook(next: Look): void {
   const shadows = next.shadows > 0;
   renderer.shadowMap.enabled = shadows;
   keyLight.castShadow = shadows;
+  // Since minor 23 the engine keeps the game's mapSize whatever the level, so the level's size is set here.
   if (shadows) keyLight.shadow.mapSize = next.shadows;
   for (const s of stones) { s.mesh.castShadow = shadows; s.mesh.receiveShadow = true; }
   if (next.reflections) {
@@ -393,15 +394,18 @@ export function applyLook(next: Look): void {
   stars.visible = starCount(next) > 0;
   motes.geometry.setDrawRange(0, moteCount(next));
   motes.visible = moteCount(next) > 0;
-  // Post effects, as the browser build's composer chain per preset.
-  renderer.ao = next.ao === "off" ? null : {
+  // Post effects, as the browser build's composer chain, with the level's effects (levelSettings()):
+  // which run, AO's resolution and samples, bloom's resolution. Full-resolution AO (the engine's
+  // "high") takes the browser's Ultra denoise radius.
+  const ao = next.ao, full = !!ao && ao.resolution >= 1;
+  renderer.ao = ao && {
     blendIntensity: 0.7, radius: 0.6, distanceExponent: 1.5, thickness: 1.0, scale: 1.0,
-    samples: next.ao === "high" ? 16 : 8,
-    denoise: { lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: next.ao === "high" ? 6 : 4, rings: 2, samples: next.ao === "high" ? 16 : 8, radiusExponent: 2 },
+    samples: ao.samples, resolution: ao.resolution,
+    denoise: { lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: full ? 6 : 4, rings: 2, samples: ao.denoiseSamples, radiusExponent: 2 },
   };
   // High threshold: only the emissive moving slab, perfect glows and the rim inlay bloom.
   // the page's r160 UnrealBloomPass exactly (model "r160", strength 0.32 as written)
-  renderer.bloom = next.bloom ? { model: "r160", strength: 0.32, radius: 0.4, threshold: 0.92, resolution: next.budget.bloomRes } : null;
+  renderer.bloom = next.bloom === null ? null : { model: "r160", strength: 0.32, radius: 0.4, threshold: 0.92, resolution: next.bloom };
   // The browser build's grade ShaderPass after OutputPass: a gentle S-curve
   // (contrastCurve "s", 0.18 of c²(3−2c)), saturation 1.1,
   // cool shadows / warm highlights, and the vignette.

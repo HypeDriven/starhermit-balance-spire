@@ -1,0 +1,24 @@
+# Graphics-tier bench (tools/engine-tier-bench.mjs): Practice (Calm) through the real UI, settle on
+# the tower 120 frames, then measure about 600 frames of play: slabs sliding in, four drops (trim
+# debris falling, the tower rising, the camera following), stars, motes and the sky moving.
+until 300 Play
+frames 5
+click Play
+until 60 Practice
+frames 5
+click Practice
+until 60 Endless rehearsal
+frames 5
+click Calm
+frames 120
+measure start
+frames 30
+key Space 2
+frames 120
+key Space 2
+frames 120
+key Space 2
+frames 120
+key Space 2
+frames 180
+measure stop
