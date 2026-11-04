@@ -24,6 +24,8 @@ File map (all in the package unless marked dev; `.starhermitignore` leaves out `
 | `native/screens.ts` | Every screen, the HUD, tray, countdown, caption and toast as `starhermit:ui`, the title key art. |
 | `native/render.ts` | The spire on `starhermit:scene` (tower, moving slab and outline, ghost marker, hint band, debris, sky dome in WGSL, skyline, stars, motes, camera spring); rounded slabs are the engine's `RoundedBoxGeometry`. |
 | `native/quality.ts` | The level's engine effects (`levelSettings()`) and the four art presets and budgets keyed by its quality tier. |
+
+Low (quantum) keeps MSAA instead of the level's "off" until engine 1.36.2: engine 1.36.1 recolours fog, haze and translucent overlays without anti-aliasing.
 | `native/audio.ts` | Clips on the runtime's mixer, rendered ambience pad and music voices, captions. |
 | `native/platform.ts` | Engine save (progress) with the browser build's cloud save migrated, game settings with the old account keys migrated, device boards, score posting, invite link, profile names. |
 | `native/i18n.ts`, `native/style.ts` | Locale from the runtime's interface language; registers `assets/ui-style.json` and the theme. |
