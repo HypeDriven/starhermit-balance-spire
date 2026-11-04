@@ -61,35 +61,17 @@ function button(b: Btn, width: number | null = null): void {
   }
   if (ui.style(...style, s).id(b.id).button(b.text, opts)) b.act();
 }
-/** Buttons at their own widths in rows that wrap at `width` and centre (CSS flex-wrap). */
+/** Buttons at their own widths in rows that wrap at `width` and centre (CSS
+ * flex-wrap: the engine's wrapping row); a label wider than `width` wraps
+ * inside a full-width button. */
 function flow(label: string, list: Btn[], width: number, gap = 8): void {
-  const rows: Btn[][] = [[]];
-  let used = 0;
-  for (const b of list) {
-    const bw = Math.min(width, buttonWidth(b.text, b.style ?? PLAIN));
-    if (rows[rows.length - 1]!.length && used + gap + bw > width) { rows.push([]); used = 0; }
-    used += (rows[rows.length - 1]!.length ? gap : 0) + bw;
-    rows[rows.length - 1]!.push(b);
-  }
-  ui.column(label, () => {
-    rows.forEach((row, ri) => ui.row(`${label}-r${ri}`, () => {
-      for (const b of row) button(b, buttonWidth(b.text, b.style ?? PLAIN) > width ? width : null);
-    }, { spacing: gap, align: "center" }));
-  }, { spacing: gap, align: "center" });
+  ui.row(label, () => {
+    for (const b of list) button(b, buttonWidth(b.text, b.style ?? PLAIN) > width ? width : null);
+  }, { wrap: true, width, gap, justify: "center", align: "center" });
 }
 /** Labels as pills in rows that wrap (the results' achievement badges). */
 function pills(label: string, texts: string[], width: number, style: string): void {
-  const rows: string[][] = [[]];
-  let used = 0;
-  for (const tx of texts) {
-    const w = labelWidth(tx, style) + 30;
-    if (rows[rows.length - 1]!.length && used + 8 + w > width) { rows.push([]); used = 0; }
-    used += (rows[rows.length - 1]!.length ? 8 : 0) + w;
-    rows[rows.length - 1]!.push(tx);
-  }
-  ui.column(label, () => {
-    rows.forEach((row, ri) => ui.row(`${label}-r${ri}`, () => { for (const tx of row) ui.style(style).label(tx); }, { spacing: 8 }));
-  }, { spacing: 8, align: "center" });
+  ui.row(label, () => { for (const tx of texts) ui.style(style).label(tx); }, { wrap: true, width, gap: 8, justify: "center" });
 }
 /** Text up to `width` wide: one label when it fits (a column centres it),
  * else a paragraph, centred with `center` (the browser's text-align). */

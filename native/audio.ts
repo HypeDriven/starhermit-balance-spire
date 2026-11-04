@@ -14,8 +14,10 @@
 // here both are rendered once into clips (createClip) with the same shapes,
 // and the synthesized stand-ins it played while a sample loaded are not
 // ported: the engine's browser runtime drops clip loads and plays while a
-// synthesis graph changes (the arrow-exodus port's finding). Clips load once
-// the mixer runs (natively at once, in a browser after the first press).
+// synthesis graph changes (the arrow-exodus port's finding). Every clip loads
+// at onStart (the engine queues them and each reaches the mixer, natively and
+// in a browser); the beds start once the mixer runs (in a browser, after the
+// first press).
 import { context, createClip, loadClip, play as playClip, type AudioClip, type Bus, type Sound } from "starhermit:audio";
 
 const LEVEL = { music: 0.4, effects: 0.8, ambience: 0.35, voice: 0.6 };
@@ -39,12 +41,13 @@ const clips = new Map<string, AudioClip>();
 let onCaption: ((text: string) => void) | null = null;
 let captionsOn = true;
 
-let wantClips = false;
-function load(name: string): void {
-  loadClip(`sfx/${name}.opus`).then((c) => { clips.set(name, c); }, (e: unknown) => console.warn(`sfx ${name}: ${String(e)}`));
+/** Loads every clip at once (onStart); a cue whose clip is still loading is skipped. */
+export function loadSfx(): void {
+  for (const name of new Set(Object.values(SAMPLE_BY_EVENT))) {
+    loadClip(`sfx/${name}.opus`).then((c) => { clips.set(name, c); }, (e: unknown) => console.warn(`sfx ${name}: ${String(e)}`));
+  }
+  loadClip("sfx/ambience-skyline.opus").then((c) => { skylineClip = c; }, () => { /* keep the pad */ });
 }
-/** Asks for the clips; they load once the mixer runs (see update). */
-export function loadSfx(): void { wantClips = true; }
 
 export function setCaptions(on: boolean): void { captionsOn = on; }
 export function setOnCaption(cb: (text: string) => void): void { onCaption = cb; }
@@ -56,8 +59,7 @@ export function event(name: string, detail?: string | number): void {
   const clip = file ? clips.get(file) : undefined;
   if (clip) {
     const bus: OldBus = VOICE.has(name) ? "voice" : "effects";
-    try { playClip(clip, { bus: BUS[bus], gain: LEVEL[bus] }); }
-    catch { clips.delete(file!); load(file!); } // a clip the mixer lost: load it again
+    try { playClip(clip, { bus: BUS[bus], gain: LEVEL[bus] }); } catch { /* the mixer is full this frame: skip it */ }
   }
   if (name === "count") caption(String(detail ?? ""));
   else if (name === "achievement") caption(`achievement: ${detail ?? ""}`);
@@ -119,17 +121,10 @@ export function setMusicIntensity(streak: number): void { musicIntensity = Math.
 /** The beds start with the first gesture (the browser build's audio unlock). */
 export function unlock(): void { started = true; }
 
-/** Each frame: what waited for the mixer, one rendered clip a frame, then
- * the pad music's next voices every 1.4 s of mixer time. */
+/** Each frame once the mixer runs: one rendered clip a frame, then the pad
+ * music's next voices every 1.4 s of mixer time. */
 export function update(): void {
-  if (context.state !== "running") return;
-  if (wantClips) {
-    wantClips = false;
-    for (const name of new Set(Object.values(SAMPLE_BY_EVENT))) load(name);
-    loadClip("sfx/ambience-skyline.opus").then((c) => { skylineClip = c; }, () => { /* keep the pad */ });
-    return;
-  }
-  if (!started) return;
+  if (context.state !== "running" || !started) return;
   try {
     if (ambience === 0) {
       ambience = 1;

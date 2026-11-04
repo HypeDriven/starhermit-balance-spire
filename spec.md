@@ -22,7 +22,7 @@ File map (all in the package unless marked dev; `.starhermitignore` leaves out `
 | `native/main.ts` | Entry module: screen flow, input routing (actions, playfield taps), session events → HUD state, announcements, captions, results, lifecycle, the fixed-step round clock. |
 | `native/classic.ts` | Loads the pure scripts below with `loadClassic` (after a `localStorage` shim over `starhermit:storage`) and types their globals. |
 | `native/screens.ts` | Every screen, the HUD, tray, countdown, caption and toast as `starhermit:ui`, the title key art. |
-| `native/render.ts`, `native/rounded.ts` | The spire on `starhermit:scene` (tower, moving slab and outline, ghost marker, hint band, debris, sky dome in WGSL, skyline, stars, motes, camera spring); rounded slab geometry. |
+| `native/render.ts` | The spire on `starhermit:scene` (tower, moving slab and outline, ghost marker, hint band, debris, sky dome in WGSL, skyline, stars, motes, camera spring); rounded slabs are the engine's `RoundedBoxGeometry`. |
 | `native/quality.ts` | The four presets and their budgets keyed by the runtime's quality tier and level. |
 | `native/audio.ts` | Clips on the runtime's mixer, rendered ambience pad and music voices, captions. |
 | `native/platform.ts` | Engine save (progress) with the browser build's cloud save migrated, game settings with the old account keys migrated, device boards, score posting, invite link, profile names. |
@@ -193,7 +193,7 @@ Star and mote counts grow within the tier by the level (`frame().levelIndex`, ×
 
 ## 9. Audio direction
 
-Mix: the runtime's buses and volumes (Options › Audio: master, music, effects, interface, mute, voice limit). Game events play on effects, the input click and voice cues (countdown, go, achievement, lesson) on interface, the music on music; the browser build's default levels (music 40 %, effects 80 %, ambience 35 %, voice 60 %) are folded into each sound's gain. Clips load once the mixer runs (in browsers after the first press). Every meaningful sound also emits a caption (setting) so nothing is audio-only.
+Mix: the runtime's buses and volumes (Options › Audio: master, music, effects, interface, mute, voice limit). Game events play on effects, the input click and voice cues (countdown, go, achievement, lesson) on interface, the music on music; the browser build's default levels (music 40 %, effects 80 %, ambience 35 %, voice 60 %) are folded into each sound's gain. Every clip loads at start; the ambience and music start once the mixer runs (in browsers after the first press). Every meaningful sound also emits a caption (setting) so nothing is audio-only.
 
 Ambience is the authored 20 s skyline loop, faded in over 1.5 s once loaded over a low-passed (240 Hz) noise pad. Music is a generative pad: every 1.4 s one to four sine voices from C4–E♭4–G4–B♭4–C5, count and gain following `min(4, streak)`. The pad and voices are rendered once into clips (`createClip`), not played as a live synthesis graph, and a clip that failed loads again instead of a synthesized stand-in.
 

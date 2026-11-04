@@ -7,7 +7,7 @@
 // mutates rules state.
 //
 // What changed from three.js, and why:
-// - RoundedBoxGeometry (an addon) is rounded.ts. r160 scaled scene.environment
+// - RoundedBoxGeometry (an addon) is starhermit:scene's. r160 scaled scene.environment
 //   by material.envMapIntensity: the stones and ground carry the room as envMap.
 // - The EffectComposer chain (GTAO, UnrealBloom, OutputPass, the grade
 //   ShaderPass, SMAA / FXAA / canvas MSAA) is renderer.ao / bloom / grade /
@@ -28,14 +28,13 @@ import {
   ACESFilmicToneMapping, AdditiveBlending, BackSide, BoxGeometry, BufferAttribute, BufferGeometry, Color,
   CylinderGeometry, DataTexture, DirectionalLight, Fog, Group, HemisphereLight, InstancedMesh,
   Matrix4, Mesh, MeshBasicMaterial, MeshLambertMaterial, MeshPhysicalMaterial, MeshStandardMaterial,
-  PCFSoftShadowMap, PMREMGenerator, PerspectiveCamera, RoomEnvironment, PlaneGeometry, Points, PointsMaterial, RepeatWrapping,
+  PCFSoftShadowMap, PMREMGenerator, PerspectiveCamera, RoomEnvironment, PlaneGeometry, Points, PointsMaterial, RepeatWrapping, RoundedBoxGeometry,
   SRGBColorSpace, ShaderMaterial, SphereGeometry, TextureLoader, TorusGeometry, Vector3, renderer, scene,
 } from "starhermit:scene";
 import type { Material, MaterialHooks, Texture } from "starhermit:scene";
 import { frame as engineFrame } from "starhermit:engine";
 import { Rules, type RngStream, type RulesEvent, type State } from "./classic.ts";
 import { MOTE_MAX, STAR_MAX, moteCount, starCount, type Look } from "./quality.ts";
-import { roundedBox } from "./rounded.ts";
 
 export type Palette = Record<string, number>;
 
@@ -95,7 +94,7 @@ rimLight.position.set(-7, 6, -9);
 // it fails.
 let stoneTex: Texture | null = null;
 const plainGeo = new BoxGeometry(1, SLAB_H, 1);
-let roundGeo: BufferGeometry = roundedBox(1, SLAB_H, 1, 2, 0.035);
+let roundGeo: BufferGeometry = new RoundedBoxGeometry(1, SLAB_H, 1, 2, 0.035);
 let roundSegs = 2;
 interface Stone { mesh: Mesh; kind: string }
 const stones: Stone[] = [];
@@ -128,7 +127,7 @@ function refreshStone(): void {
   const segs = Math.max(1, look!.budget.bevel);
   if (segs !== roundSegs) {
     const old = roundGeo;
-    roundGeo = roundedBox(1, SLAB_H, 1, segs, 0.035);
+    roundGeo = new RoundedBoxGeometry(1, SLAB_H, 1, segs, 0.035);
     roundSegs = segs;
     old.dispose();
   }
