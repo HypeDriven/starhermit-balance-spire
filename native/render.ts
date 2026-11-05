@@ -15,8 +15,8 @@
 //   same curve, tints and vignette.
 // - The sky dome's GLSL ShaderMaterial is WGSL. The stars' and motes' point
 //   shaders (Points take no shader) are PointsMaterial with a soft round
-//   map: the twinkle is the points' vertex colors and the motes' rise their
-//   positions, updated per frame.
+//   map: the twinkle is the points' vertex colors, updated per frame, and
+//   the motes are a ParticleEmitter.
 // - LineSegments (the moving slab's outline) do not exist: twelve thin boxes
 //   of one InstancedMesh along the slab's edges.
 // - The skyline's per-face material array (lit windows on the sides only) is
@@ -30,6 +30,7 @@ import {
   Matrix4, Mesh, MeshBasicMaterial, MeshLambertMaterial, MeshPhysicalMaterial, MeshStandardMaterial,
   PCFSoftShadowMap, PMREMGenerator, PerspectiveCamera, RoomEnvironment, PlaneGeometry, Points, PointsMaterial, RepeatWrapping, RoundedBoxGeometry,
   SRGBColorSpace, ShaderMaterial, SphereGeometry, TextureLoader, TorusGeometry, Vector3, renderer, scene,
+  ParticleEmitter, tween,
 } from "starhermit:scene";
 import type { Material, MaterialHooks, Texture } from "starhermit:scene";
 import { frame as engineFrame } from "starhermit:engine";
@@ -57,7 +58,8 @@ let lastState: State | null = null;
 
 const _m = new Matrix4();
 
-// Deterministic cosmetic PRNG (stars, motes, windows), independent of gameplay streams.
+// Deterministic cosmetic PRNG (stars, windows), independent of gameplay streams.
+// Kept rather than createRandom: its sequence is the skyline, stars and windows players see.
 function mulberry(seed: number): () => number {
   return () => {
     seed |= 0; seed = (seed + 0x6d2b79f5) | 0;
@@ -204,8 +206,7 @@ rimGlow.noAO = true;
 
 interface Debris { mesh: Mesh; active: boolean; vx: number; vy: number; vz: number }
 const debris: Debris[] = [];
-interface Flash { mesh: Mesh; base: number; t: number }
-const flashes: Flash[] = [];
+const flashing = new Set<Mesh>();
 
 // --- skyline -------------------------------------------------------------------------
 let skyline: InstancedMesh | null = null;
@@ -295,9 +296,6 @@ function dotTexture(): DataTexture {
 const starBase = new Float32Array(STAR_MAX * 3);
 const starPhase = new Float32Array(STAR_MAX);
 const starColor = new Float32Array(STAR_MAX * 3);
-const moteBase = new Float32Array(MOTE_MAX * 3);
-const motePhase = new Float32Array(MOTE_MAX);
-const motePos = new Float32Array(MOTE_MAX * 3);
 {
   const rnd = mulberry(0x5ba1);
   for (let i = 0; i < STAR_MAX; i++) {
@@ -307,13 +305,6 @@ const motePos = new Float32Array(MOTE_MAX * 3);
     starBase[i * 3 + 2] = Math.sin(ang) * r;
     starPhase[i] = rnd();
   }
-  for (let i = 0; i < MOTE_MAX; i++) {
-    const ang = rnd() * PI * 2, r = 1.8 + rnd() * 3.5;
-    moteBase[i * 3] = Math.cos(ang) * r;
-    moteBase[i * 3 + 1] = rnd() * 9;
-    moteBase[i * 3 + 2] = Math.sin(ang) * r;
-    motePhase[i] = rnd();
-  }
   starColor.fill(1);
 }
 const starGeo = new BufferGeometry();
@@ -321,11 +312,22 @@ starGeo.setAttribute("position", new BufferAttribute(starBase, 3));
 starGeo.setAttribute("color", new BufferAttribute(starColor, 3));
 const starMat = new PointsMaterial({ map: dotTexture(), size: 0.5, color: 0xdfe6ff, opacity: 0.85, transparent: true, depthWrite: false, blending: AdditiveBlending, fog: false, vertexColors: true });
 const stars = new Points(starGeo, starMat);
-const moteGeo = new BufferGeometry();
-moteGeo.setAttribute("position", new BufferAttribute(motePos, 3));
 const moteMat = new PointsMaterial({ map: dotTexture(), size: 0.12, color: 0xffd9a0, opacity: 0.55, transparent: true, depthWrite: false, blending: AdditiveBlending, fog: false });
-const motes = new Points(moteGeo, moteMat);
-stars.frustumCulled = motes.frustumCulled = false;
+// The motes rise round the tower top, in a band that follows the camera (frame()).
+const motes = new ParticleEmitter({
+  capacity: MOTE_MAX, material: moteMat, seed: 0x5ba1, space: "local", shape: "box", extent: [4.4, 3.5, 4.4],
+});
+/** Rising, or still under reduced motion; `count` motes alive at once. */
+function setMotes(count: number): void {
+  motes.visible = count > 0;
+  motes.clear();
+  if (!count) { motes.rate = 0; return; }
+  motes.set(reducedMotion
+    ? { velocity: [0, 0, 0], velocitySpread: 0, life: 3600, rate: 0 }
+    : { velocity: [0, 0.35, 0], velocitySpread: [0.07, 0.175, 0.07], life: [2, 26], rate: count / 14 });
+  motes.burst(count);
+}
+stars.frustumCulled = false;
 
 // --- environment ---------------------------------------------------------------------
 let envTex: Texture | null = null;
@@ -392,8 +394,7 @@ export function applyLook(next: Look): void {
   if (skylineKey !== `${next.detailed}:${next.budget.skyline}`) buildSkyline();
   stars.geometry.setDrawRange(0, starCount(next));
   stars.visible = starCount(next) > 0;
-  motes.geometry.setDrawRange(0, moteCount(next));
-  motes.visible = moteCount(next) > 0;
+  setMotes(moteCount(next));
   // Post effects, as the browser build's composer chain, with the level's effects (levelSettings()):
   // which run, AO's resolution and samples, bloom's resolution. Full-resolution AO (the engine's
   // "high") takes the browser's Ultra denoise radius.
@@ -451,7 +452,11 @@ export function setTheme(palette: Palette, decorRng: RngStream | null): void {
   buildSkyline();
 }
 
-export function setReducedMotion(on: boolean): void { reducedMotion = on; }
+export function setReducedMotion(on: boolean): void {
+  if (on === reducedMotion) return;
+  reducedMotion = on;
+  if (look) setMotes(moteCount(look));
+}
 export function setHintVisible(on: boolean): void {
   hintOn = on;
   hintMat.opacity = on ? 0.28 : 0;
@@ -479,7 +484,7 @@ export function syncState(state: State, alpha: number): void {
     mesh.scale.set(s.w / MU, 1, s.d / MU);
     mesh.position.set(s.x / MU, i * SLAB_H + SLAB_H / 2, s.z / MU);
     // Don't stomp an in-flight placement flash.
-    if (!flashes.some((fx) => fx.mesh === mesh)) lit(mesh).emissiveIntensity = s.perfect && i > 0 ? 0.45 : 0.12;
+    if (!flashing.has(mesh)) lit(mesh).emissiveIntensity = s.perfect && i > 0 ? 0.45 : 0.12;
   }
 
   if (state.pending && !state.terminal) {
@@ -564,8 +569,11 @@ function flashTop(strength: number): void {
   const mesh = slabMeshes[n - 1];
   if (!mesh || !mesh.visible) return;
   const base = lastState!.slabs[n - 1]!.perfect ? 0.45 : 0.12;
-  lit(mesh).emissiveIntensity = strength;
-  flashes.push({ mesh, base, t: 0 });
+  const m = lit(mesh);
+  m.emissiveIntensity = strength;
+  flashing.add(mesh);
+  // easeOutExpo over 1.1 s is the browser build's decay, 0.9 a 60 Hz frame.
+  tween(m, { emissiveIntensity: base }, { duration: 1.1, easing: "easeOutExpo", onComplete: () => { flashing.delete(mesh); } });
 }
 
 function spawnDebris(ev: RulesEvent): void {
@@ -619,7 +627,7 @@ export function frame(dtRaw: number): void {
   camera.position.set(sx, camY + FRAMING.rise, FRAMING.dist + sz);
   camera.lookAt(0, camY - FRAMING.lookDrop, 0);
 
-  // Debris falls under gravity and tumbles; flashes ease back over 0.8 s.
+  // Debris falls under gravity and tumbles.
   for (const d of debris) {
     if (!d.active) continue;
     d.vy -= 9.8 * dt;
@@ -628,14 +636,6 @@ export function frame(dtRaw: number): void {
     d.mesh.position.y += d.vy * dt;
     if (!reducedMotion) d.mesh.rotation.x += 2.4 * dt;
     if (d.mesh.position.y < -2) { d.active = false; d.mesh.visible = false; }
-  }
-  const decay = Math.pow(0.9, dt * 60);
-  for (let i = flashes.length - 1; i >= 0; i--) {
-    const fx = flashes[i]!;
-    fx.t += dt;
-    const m = lit(fx.mesh);
-    m.emissiveIntensity = fx.base + (m.emissiveIntensity - fx.base) * decay;
-    if (fx.t > 0.8) { m.emissiveIntensity = fx.base; flashes.splice(i, 1); }
   }
 
   // Ambient motion: sky bands drift, stars twinkle, motes rise, the moving slab breathes.
@@ -655,18 +655,6 @@ export function frame(dtRaw: number): void {
     attr.array = starColor;
     attr.needsUpdate = true;
   }
-  const nm = moteCount(look);
-  if (nm > 0) {
-    for (let i = 0; i < nm; i++) {
-      const ph = motePhase[i]!;
-      const y0 = moteBase[i * 3 + 1]! + time * 0.35 * (0.5 + ph);
-      motePos[i * 3] = moteBase[i * 3]! + Math.sin(time * 0.4 + ph * 17) * 0.25;
-      motePos[i * 3 + 1] = camY + (y0 % 9) - 4.5;
-      motePos[i * 3 + 2] = moteBase[i * 3 + 2]!;
-    }
-    const attr = (moteGeo.getAttribute("position") as BufferAttribute);
-    attr.array = motePos;
-    attr.needsUpdate = true;
-  }
-  if (movingSlab.visible && !flashes.length) lit(movingSlab).emissiveIntensity = animate ? 0.5 + 0.1 * Math.sin(time * 3.2) : 0.5;
+  motes.position.y = camY - 0.5;
+  if (movingSlab.visible && !flashing.size) lit(movingSlab).emissiveIntensity = animate ? 0.5 + 0.1 * Math.sin(time * 3.2) : 0.5;
 }

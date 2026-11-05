@@ -27,12 +27,9 @@ import {
 // ------------------------------------------------------------------ layout
 interface Layout { lw: number; lh: number; sc: number; narrow: boolean; shortLand: boolean; wide: boolean }
 function layoutNow(): Layout {
-  const f = frame();
-  const sc = ui.preferences().scale;
-  const sa = f.safeArea;
-  const lw = Math.max(1, (f.width - sa.left - sa.right) / sc), lh = Math.max(1, (f.height - sa.top - sa.bottom) / sc);
-  const shortLand = lw > lh && lh <= 480;
-  return { lw, lh, sc, narrow: lw <= 640 && !shortLand, shortLand, wide: lw >= 1024 };
+  const v = ui.viewport!();
+  const shortLand = v.orientation === "landscape" && v.heightClass === "compact";
+  return { lw: Math.max(1, v.width), lh: Math.max(1, v.height), sc: v.scale, narrow: v.widthClass === "compact" && !shortLand, shortLand, wide: v.widthClass === "expanded" || v.widthClass === "large" };
 }
 
 const lastHeight = new Map<string, number>();
@@ -263,7 +260,7 @@ function tray(L: Layout): void {
 
 // ------------------------------------------------------------------ screens
 function accountLine(): string {
-  if (app.signedOut) return t("acct.signedOut");
+  if (app.signedOut) return t("starhermit.signedOut");
   const name = platform.displayName();
   if (!name) return t("net.local");
   const st = platform.syncState();
@@ -286,12 +283,12 @@ function titleScreen(L: Layout): void {
       { id: "btn-settings", text: t("settings"), style: ["btn", "btn-subtle"], act: openSettings },
     ], w);
     const account: Btn[] = [];
-    if (!platform.signedIn()) account.push({ id: "btn-sign-in", text: t("acct.signIn"), style: ["btn", "btn-subtle"], act: () => { void requestSignIn().catch(() => undefined); } });
+    if (!platform.signedIn()) account.push({ id: "btn-sign-in", text: t("starhermit.signIn"), style: ["btn", "btn-subtle"], act: () => { void requestSignIn().catch(() => undefined); } });
     const link = platform.inviteLink();
     if (link) {
       account.push({
-        id: "btn-invite", text: t("acct.invite"), style: ["btn", "btn-subtle"],
-        act: () => { try { clipboard.writeText(link); toast(t("acct.inviteCopied")); } catch { toast(`${t("acct.inviteFailed")} ${link}`); } },
+        id: "btn-invite", text: t("starhermit.invite"), style: ["btn", "btn-subtle"],
+        act: () => { try { clipboard.writeText(link); toast(t("starhermit.inviteCopied")); } catch { toast(`${t("starhermit.inviteFailed")} ${link}`); } },
       });
     }
     if (account.length) flow("title-account", account, w);
@@ -436,7 +433,7 @@ function resultsScreen(L: Layout): void {
     if (res.localRank) para(t("res.local", res.localRank), w, "dim", "results-board");
     if (res.lb) {
       const lb = res.lb;
-      para(lb.pending ? t("acct.lbPosting") : !lb.posted ? t("acct.lbNotPosted") : lb.rank ? t("acct.lbRank", { rank: lb.rank }) : t("acct.lbPosted"), w, "dim", "results-lb");
+      para(lb.pending ? t("starhermit.leaderboardPosting") : !lb.posted ? t("starhermit.leaderboardNotPosted") : lb.rank ? t("starhermit.leaderboardRank", { rank: lb.rank }) : t("starhermit.leaderboardPosted"), w, "dim", "results-lb");
     }
     if (res.achievements.length) pills("results-badges", res.achievements.map(achievementName), w, "badge");
     const next = res.won ? nextJourneyLevel() : null;

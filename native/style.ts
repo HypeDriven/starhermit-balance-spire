@@ -21,6 +21,8 @@ export function initStyles(): void {
   ui.setAnimations(css.animations);
   ui.setStyles({
     ...css.styles,
+    // Text-style symbols from the engine's emoji font, the same glyph everywhere (`starhermit css` drops this family).
+    ".stars": { text: { color: "$accent", font: "StarHermit Emoji" } },
     label: { text: { color: "$ink" } },
     paragraph: { text: { color: "$ink" } },
     checkbox: {

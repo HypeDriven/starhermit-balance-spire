@@ -13,7 +13,7 @@
 // rate): ticks advance only while the round is active and the game runs, so
 // pausing, a hidden window and a slow frame never move the slab.
 import { frame, levelSettings, onFixedUpdate, onQuit, onRender, onResume, onStart, onSuspend, onUpdate, onPreferencesChange, preferences, setFixedRate } from "starhermit:engine";
-import { bindingLabel, onAction, onPointerButton, onTouch, vibrate } from "starhermit:input";
+import { bindingLabel, onAction, onGesture, vibrate } from "starhermit:input";
 import * as ui from "starhermit:ui";
 import { onPlayerChange, onSessionEnded } from "starhermit:platform";
 import { Content, RNG, Rules, Session, type Cfg, type Lesson, type Results, type Round, type RulesEvent, type State } from "./classic.ts";
@@ -407,31 +407,12 @@ onAction((e) => {
   }
 });
 
-// Playfield taps drop the slab (a tap: under 500 ms and 24 px of travel; a
-// drag is not one). Touch and the mouse can both report one tap: a pointer
-// press right after a touch is skipped.
-let down: { at: number; x: number; y: number } | null = null;
-let lastTouch = -1e9;
-function playfieldDown(x: number, y: number): void {
-  down = !app.screen && !ui.pointerOver() ? { at: now(), x, y } : null;
-}
-function playfieldUp(x: number, y: number): void {
-  const d = down;
-  down = null;
-  if (!d || app.screen) return;
-  const f = frame();
-  if (now() - d.at < 500 && Math.hypot(x - d.x, y - d.y) < 24 * f.scale) doDrop();
-}
-onPointerButton((e) => {
-  if (e.button !== 0 || now() - lastTouch < 600) return;
-  if (e.pressed) playfieldDown(e.x, e.y); else playfieldUp(e.x, e.y);
-});
-onTouch((e) => {
-  if (!e.primary) return;
-  lastTouch = now();
-  if (e.phase === "start") playfieldDown(e.x, e.y);
-  else if (e.phase === "end") playfieldUp(e.x, e.y);
-  else if (e.phase === "cancel") down = null;
+// Playfield taps drop the slab (under 500 ms and 24 px of travel, wider than
+// the recognizer's 12 px tap: a short drag counts too). The engine leaves out
+// presses the UI takes and the pointer platforms move with a finger.
+onGesture!((e) => {
+  if (app.screen || ui.pointerOver()) return;
+  if (e.type === "tap" || (e.type === "dragEnd" && !e.cancelled && e.held < 0.5 && Math.hypot(e.x - e.startX, e.y - e.startY) < 24 * frame().scale)) doDrop();
 });
 
 // ------------------------------------------------------------------ boot and lifecycle
@@ -466,7 +447,7 @@ onStart(() => {
 onPreferencesChange((p) => render.setReducedMotion(p.reducedMotion));
 platform.onSettingsChange(() => audio.setCaptions(Session.settings.captions));
 platform.onProgressMerged(() => { if (app.screen === "setup") fillSetup(app.setupMode); });
-onSessionEnded(() => { app.signedOut = true; toast(t("acct.signedOut")); });
+onSessionEnded(() => { app.signedOut = true; toast(t("starhermit.signedOut")); });
 onPlayerChange((p) => { if (p) app.signedOut = false; });
 onSuspend(() => {
   // Backgrounding pauses the round and keeps a snapshot.

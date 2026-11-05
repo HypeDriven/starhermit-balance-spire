@@ -11,15 +11,16 @@
 // effects 80 %, ambience 35 %, voice 60 %) are folded into each sound's gain.
 //
 // The browser build made the noise pad and the music with Web Audio nodes;
-// here both are rendered once into clips (createClip) with the same shapes,
-// and the synthesized stand-ins it played while a sample loaded are not
+// here both are the same graphs rendered once, natively, into clips
+// (OfflineAudioContext), and the synthesized stand-ins it played while a sample loaded are not
 // ported: the engine's browser runtime drops clip loads and plays while a
 // synthesis graph changes (the arrow-exodus port's finding). Every clip loads
 // at onStart (the engine queues them and each reaches the mixer, natively and
 // in a browser); the beds start once the mixer runs (in a browser, after the
 // first press).
-import { context, createClip, loadClip, play as playClip, type AudioClip, type Bus, type Sound } from "starhermit:audio";
+import { OfflineAudioContext, context, createClip, loadClip, play as playClip, type AudioClip, type Bus, type Sound } from "starhermit:audio";
 
+const RATE = 11025;
 const LEVEL = { music: 0.4, effects: 0.8, ambience: 0.35, voice: 0.6 };
 type OldBus = keyof typeof LEVEL;
 const BUS: Record<OldBus, Bus> = { music: "music", effects: "effects", ambience: "effects", voice: "interface" };
@@ -47,6 +48,8 @@ export function loadSfx(): void {
     loadClip(`sfx/${name}.opus`).then((c) => { clips.set(name, c); }, (e: unknown) => console.warn(`sfx ${name}: ${String(e)}`));
   }
   loadClip("sfx/ambience-skyline.opus").then((c) => { skylineClip = c; }, () => { /* keep the pad */ });
+  renderPad().then((c) => { padClip = c; }, (e: unknown) => console.warn(`pad: ${String(e)}`));
+  Promise.all(MUS_SCALE.map(renderNote)).then((c) => { notes = c; }, (e: unknown) => console.warn(`music: ${String(e)}`));
 }
 
 export function setCaptions(on: boolean): void { captionsOn = on; }
@@ -67,43 +70,33 @@ export function event(name: string, detail?: string | number): void {
 }
 
 // -- rendered beds ------------------------------------------------------------------------
-const RATE = 11025;
-/** RBJ biquad lowpass over `x` in place (Web Audio's BiquadFilterNode, Q 1). */
-function lowpass(x: Float32Array, freq: number, q = 1): void {
-  const w = (2 * Math.PI * freq) / RATE, alpha = Math.sin(w) / (2 * q), c = Math.cos(w);
-  const a0 = 1 + alpha;
-  const b0 = (1 - c) / 2 / a0, b1 = (1 - c) / a0, b2 = b0, a1 = (-2 * c) / a0, a2 = (1 - alpha) / a0;
-  let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
-  for (let i = 0; i < x.length; i++) {
-    const x0 = x[i]!;
-    const y0 = b0 * x0 + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
-    x2 = x1; x1 = x0; y2 = y1; y1 = y0;
-    x[i] = y0;
-  }
-}
-/** The pad under the ambience: white noise (±0.3) lowpassed at 240 Hz, a seamless 2 s loop. */
-function padClip(): AudioClip {
-  const n = 2 * RATE, fade = Math.round(0.25 * RATE);
-  const raw = new Float32Array(n + fade);
-  let seed = 7;
-  for (let i = 0; i < raw.length; i++) {
-    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-    raw[i] = ((seed / 0x7fffffff) * 2 - 1) * 0.3;
-  }
-  lowpass(raw, 240);
-  const out = raw.slice(0, n);
-  for (let i = 0; i < fade; i++) { const k = i / fade; out[i] = raw[n + i]! * (1 - k) + raw[i]! * k; }
-  return createClip([out], RATE);
+/** The pad under the ambience: white noise (±0.3) lowpassed at 240 Hz. The noise
+ * loops every 2 s, so once the filter settles the output does too: one period of it is a seamless loop. */
+async function renderPad(): Promise<AudioClip> {
+  const n = 2 * RATE, settle = Math.round(0.25 * RATE);
+  const off = new OfflineAudioContext(1, settle + n, RATE);
+  const noise = off.createNoise({ seed: 7, seconds: 2 });
+  const lowpass = off.createBiquadFilter();
+  lowpass.type = "lowpass";
+  lowpass.frequency.value = 240;
+  const gain = off.createGain();
+  gain.gain.value = 0.3;
+  noise.connect(lowpass).connect(gain).connect(off.destination);
+  noise.start();
+  const rendered = await off.startRendering();
+  return createClip([rendered.getChannelData(0).slice(settle)], RATE);
 }
 /** One music voice: a sine falling exponentially to silence over 1.6 s (gain 1; scaled when played). */
-function noteClip(freq: number): AudioClip {
-  const n = Math.round(1.62 * RATE);
-  const out = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    const t = i / RATE;
-    out[i] = Math.sin(2 * Math.PI * freq * t) * Math.pow(0.0001, Math.min(1, t / 1.6));
-  }
-  return createClip([out], RATE);
+async function renderNote(freq: number): Promise<AudioClip> {
+  const off = new OfflineAudioContext(1, Math.round(1.62 * RATE), RATE);
+  const osc = off.createOscillator();
+  osc.frequency.value = freq;
+  const gain = off.createGain();
+  gain.gain.setValueAtTime(1, 0);
+  gain.gain.exponentialRampToValueAtTime(0.0001, 1.6);
+  osc.connect(gain).connect(off.destination);
+  osc.start();
+  return createClip(await off.startRendering());
 }
 
 let started = false;
@@ -111,8 +104,9 @@ let ambience = 0; // 0 nothing yet, 1 the pad, 2 the authored loop too
 let pad: Sound | null = null;
 let skyline: Sound | null = null;
 let skylineClip: AudioClip | null = null;
+let padClip: AudioClip | null = null;
 const MUS_SCALE = [261.6, 311.1, 392.0, 466.2, 523.3];
-const notes: AudioClip[] = [];
+let notes: AudioClip[] = [];
 let musicIntensity = 0;
 let musicStep = 0;
 let nextNote = 0;
@@ -121,14 +115,14 @@ export function setMusicIntensity(streak: number): void { musicIntensity = Math.
 /** The beds start with the first gesture (the browser build's audio unlock). */
 export function unlock(): void { started = true; }
 
-/** Each frame once the mixer runs: one rendered clip a frame, then the pad
- * music's next voices every 1.4 s of mixer time. */
+/** Each frame once the mixer runs: the beds as their clips are ready, then
+ * the pad music's next voices every 1.4 s of mixer time. */
 export function update(): void {
   if (context.state !== "running" || !started) return;
   try {
-    if (ambience === 0) {
+    if (ambience === 0 && padClip) {
       ambience = 1;
-      pad = playClip(padClip(), { bus: BUS.ambience, gain: 0.6 * LEVEL.ambience, loop: true });
+      pad = playClip(padClip, { bus: BUS.ambience, gain: 0.6 * LEVEL.ambience, loop: true });
       return;
     }
     if (ambience === 1 && skylineClip) {
@@ -139,7 +133,7 @@ export function update(): void {
       pad?.fade(0, 1.5);
       return;
     }
-    if (notes.length < MUS_SCALE.length) { notes.push(noteClip(MUS_SCALE[notes.length]!)); return; }
+    if (!notes.length) return;
   } catch (e) { console.warn(`beds: ${String(e)}`); return; }
   const now = context.currentTime;
   if (now < nextNote) return;

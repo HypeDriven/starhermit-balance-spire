@@ -1,32 +1,20 @@
 // The browser build's pure game scripts, unchanged and shared with the Node
-// tests: rng, rules, content and session (js/*.js, UMD) plus the string
-// tables (js/i18n.js), evaluated as classic scripts so their globals
-// (BSRNG, BSRules, BSContent, BSSession, BSI18n), and the browser build's
+// tests: rng, rules, content and session (js/*.js, UMD), evaluated as classic scripts so their globals
+// (BSRNG, BSRules, BSContent, BSSession), and the browser build's
 // account data as it migrates (js/migrate.js, BSMigrate), are this module's
 // exports.
 //
 // js/session.js keeps its documents in `localStorage` (settings, progress,
-// the crash-safe round snapshot): here that is a small shim over the
-// device's starhermit:storage, installed before the script runs. Progress
-// is also the game's save (platform.ts), which is the authority; the
-// device copy is its cache, as in the browser build.
-import { storage } from "starhermit:storage";
+// the crash-safe round snapshot): the engine's, over the device's
+// starhermit:storage, installed before the script runs. Progress is also the
+// game's save (platform.ts), which is the authority; the device copy is its
+// cache, as in the browser build.
+import { installLocalStorage } from "starhermit:storage";
 import { loadClassic } from "starhermit:script";
 
-const shim = {
-  getItem(key: string): string | null {
-    try { return storage.getText(key); } catch { return null; }
-  },
-  setItem(key: string, value: string): void {
-    try { storage.set(key, String(value)); } catch (e) { console.warn(`storage ${key}: ${String(e)}`); }
-  },
-  removeItem(key: string): void {
-    try { storage.remove(key); } catch { /* gone */ }
-  },
-};
-(globalThis as unknown as { localStorage: typeof shim }).localStorage = shim;
+installLocalStorage();
 
-for (const f of ["js/rng.js", "js/rules.js", "js/content.js", "js/i18n.js", "js/session.js", "js/migrate.js"]) loadClassic(f);
+for (const f of ["js/rng.js", "js/rules.js", "js/content.js", "js/session.js", "js/migrate.js"]) loadClassic(f);
 
 // -- The shapes this client reads -------------------------------------------------
 export interface Slab { x: number; z: number; w: number; d: number; perfect?: boolean }
@@ -118,12 +106,6 @@ interface SessionApi {
   loadSnapshot(): Round | null;
 }
 interface RngApi { derive(seed: number, stream: number): RngStream; STREAM_DECOR: number; STREAM_AV: number }
-interface I18nApi {
-  t(key: string, vars?: Record<string, string | number> | null, fallback?: string): string;
-  setLocale(tag: string): void;
-  LOCALES: string[];
-  readonly lang: string;
-}
 
 interface MigrateApi {
   GAME_SETTING_KEYS: string[];
@@ -134,10 +116,9 @@ interface MigrateApi {
   migrateSetting(key: string, value: unknown): boolean | undefined;
 }
 
-const g = globalThis as unknown as { BSRules: RulesApi; BSContent: ContentApi; BSSession: SessionApi; BSRNG: RngApi; BSI18n: I18nApi; BSMigrate: MigrateApi };
+const g = globalThis as unknown as { BSRules: RulesApi; BSContent: ContentApi; BSSession: SessionApi; BSRNG: RngApi; BSMigrate: MigrateApi };
 export const Rules = g.BSRules;
 export const Content = g.BSContent;
 export const Session = g.BSSession;
 export const RNG = g.BSRNG;
-export const I18n = g.BSI18n;
 export const Migrate = g.BSMigrate;

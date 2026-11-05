@@ -28,7 +28,7 @@ File map (all in the package unless marked dev; `.starhermitignore` leaves out `
 | `native/platform.ts` | Engine save (progress) with the browser build's cloud save migrated, game settings with the old account keys migrated, device boards, score posting, invite link, profile names. |
 | `native/i18n.ts`, `native/style.ts` | Locale from the runtime's interface language; registers `assets/ui-style.json` and the theme. |
 | `js/rng.js`, `js/rules.js`, `js/content.js`, `js/session.js` | Unchanged pure game logic (UMD), shared with the Node tests: PRNG, rules engine, versioned content, round runner (its clock injectable with `setClock`). |
-| `js/i18n.js` | Every player-facing string in the nine locales (game strings, content names, account and leaderboard lines). |
+| `assets/strings.json` | Every player-facing string in the nine locales (game strings, content names), for the engine's `strings`; account and leaderboard lines are the engine's `starhermit.*` strings. |
 | `js/migrate.js` | What the browser build left in the account: its cloud-save document and settings keys, as the engine client takes them over. |
 | `assets/ui-style.json` | `tools/ui-style.css` converted by `starhermit css` (`npm run css`). |
 | `assets/title-backdrop.webp`, `assets/slab-stone.webp` | Title key art; limestone grain on slabs. |
@@ -219,7 +219,7 @@ SFX event table (source for `sfx/manifest.txt`; event ids are keys of `SAMPLE_BY
 
 ## 10. Localization
 
-Nine locales ship for all player-facing text: **en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR, it-IT** (`js/i18n.js`: screens, HUD, setup, results, help, boards, announcements, captions, refusal reasons, content names and texts, the account and leaderboard lines). `content.js` keeps English data; the client looks names up by id. The language is the runtime's interface language (`preferences().language`: the player's choice in Options › Language, else the account's or device's), mapped to the nearest shipped locale (`es-MX → es-419`, `en-AU → en-GB`, `fr → fr-FR`, `pt-PT → pt-BR`) and applied live: every screen re-renders in the new language next frame, the round and the scene untouched. en-GB uses "centre"; es-ES says "Intro"; fr-CA uses "pointage". Long labels wrap (paragraphs) and the HUD stacks when a translation does not fit one row.
+Nine locales ship for all player-facing text: **en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR, it-IT** (`assets/strings.json`: screens, HUD, setup, results, help, boards, announcements, captions, refusal reasons, content names and texts, the account and leaderboard lines). `content.js` keeps English data; the client looks names up by id. The language is the runtime's interface language (`preferences().language`: the player's choice in Options › Language, else the account's or device's), mapped to the nearest shipped locale (`es-MX → es-419`, `en-AU → en-GB`, `fr → fr-FR`, `pt-PT → pt-BR`) and applied live: every screen re-renders in the new language next frame, the round and the scene untouched. en-GB uses "centre"; es-ES says "Intro"; fr-CA uses "pointage". Long labels wrap (paragraphs) and the HUD stacks when a translation does not fit one row.
 
 ## 11. Accessibility
 
@@ -248,11 +248,11 @@ Not used: StarHermit achievements (achievements live in the progress document), 
 
 ## 13. Technical architecture
 
-- **Modules**: `native/main.ts` is the entry; `native/classic.ts` installs a `localStorage` shim over `starhermit:storage` and loads `js/rng.js`, `rules.js`, `content.js`, `i18n.js`, `session.js`, `migrate.js` with `loadClassic`, so the shipped rules are the code the Node tests run.
+- **Modules**: `native/main.ts` is the entry; `native/classic.ts` installs the engine's `localStorage` and loads `js/rng.js`, `rules.js`, `content.js`, `session.js`, `migrate.js` with `loadClassic`, so the shipped rules are the code the Node tests run.
 - **Clock and loop**: `setFixedRate(60)`; each fixed step advances the session clock (`BSSession.setClock`) and runs `session.update()` (countdown, time-limit watchdog). Drops read the tick at the action. `onRender` interpolates the moving slab between steps, syncs the scene, steps the camera spring, debris and ambient motion, and builds the UI. Ticks advance only while active and the game runs (pause, a hidden window, the runtime's menus never move the slab).
 - **Determinism and replay**: rules never read the clock; the replay envelope (schema 1, content and state versions, cfgId, date, seed, hashes, ordered commands, result) is what `server.js` re-validates.
 - **Persistence**: `storage` holds `bs.settings.v1`, `bs.progress.v1` (the device cache of the save), `bs.snapshot.v1` (written on suspend and quit, restored paused at start), `bs.boards.v1`, `bs.playerId`; `saves` holds the progress; `settings` the game's toggles.
-- **Rendering budgets**: per tier (§8); slab meshes pooled and hidden; debris pooled to the budget; stars and motes are two Points objects drawn to the budget's count.
+- **Rendering budgets**: per tier (§8); slab meshes pooled and hidden; debris pooled to the budget; stars are a Points object drawn to the budget's count and motes a ParticleEmitter at it.
 
 ## 14. Testing and acceptance criteria
 
