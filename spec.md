@@ -21,7 +21,7 @@ File map (all in the package unless marked dev; `.starhermitignore` leaves out `
 | `index.html`, `starhermit-files.json` | The engine's web loader and file index, written by `npm run package` (`starhermit package --web .`); never edited by hand. |
 | `native/main.ts` | Entry module: screen flow, input routing (actions, playfield taps), session events → HUD state, announcements, captions, results, lifecycle, the fixed-step round clock. |
 | `native/classic.ts` | Loads the pure scripts below with `loadClassic` (after a `localStorage` shim over `starhermit:storage`) and types their globals. |
-| `native/screens.ts` | Every screen, the HUD, tray, countdown, caption and toast as `starhermit:ui`, the title key art. |
+| `native/screens.ts` | Every screen, the HUD, tray, countdown and caption as `starhermit:ui` (the toast is `ui.toast`, from `native/main.ts`), the title key art. |
 | `native/render.ts` | The spire on `starhermit:scene` (tower, moving slab and outline, ghost marker, hint band, debris, sky dome in WGSL, skyline, stars, motes, camera spring); rounded slabs are the engine's `RoundedBoxGeometry`. |
 | `native/quality.ts` | The level's engine effects (`levelSettings()`) and the four art presets and budgets keyed by its quality tier. |
 | `native/audio.ts` | Clips on the runtime's mixer, rendered ambience pad and music voices, captions. |

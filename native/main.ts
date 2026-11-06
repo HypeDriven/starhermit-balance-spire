@@ -42,7 +42,6 @@ export const app = {
   pendingSetup: null as { mode: string; cfg: Cfg } | null,
   results: null as (Results & { localRank: { rank: number; total: number } | null; lb: LbLine | null }) | null,
   boardDate: "",
-  toast: null as { text: string; until: number } | null,
   caption: null as { text: string; until: number } | null,
   countdown: "" as string,
   hintFlashUntil: 0,
@@ -105,7 +104,14 @@ export function keyName(action: string): string {
 export function announce(msg: string, assertive = false): void {
   if (msg) ui.announce(msg, { politeness: assertive ? "assertive" : "polite" });
 }
-export function toast(text: string): void { app.toast = { text, until: now() + 2600 }; }
+let shownToast: ui.Toast | null = null;
+/** One toast at a time, for 2.6 s, under the HUD in a round: a press still reaches the playfield. Callers announce. */
+export function toast(text: string): void {
+  shownToast?.dismiss();
+  const r = Session.round, inRound = !!r && r.phase !== "ended" && !app.screen, v = ui.viewport!();
+  const narrow = v.widthClass === "compact" && !(v.orientation === "landscape" && v.heightClass === "compact");
+  shownToast = ui.toast!(text, { duration: 2.6, style: "toast", dismissible: false, announce: false, position: "top", offset: inRound ? (narrow ? 104 : 60) : 0 });
+}
 function showCaption(text: string): void {
   if (!Session.settings.captions || !text) return;
   const m = /^achievement: (.*)$/.exec(text);
@@ -407,13 +413,12 @@ onAction((e) => {
   }
 });
 
-// Playfield taps drop the slab (under 500 ms and 24 px of travel, wider than
-// the recognizer's 12 px tap: a short drag counts too). The engine leaves out
-// presses the UI takes and the pointer platforms move with a finger.
+// Playfield taps drop the slab (under 500 ms and 24 px of travel). The engine
+// leaves out presses the UI takes and the pointer platforms move with a finger.
 onGesture!((e) => {
   if (app.screen || ui.pointerOver()) return;
-  if (e.type === "tap" || (e.type === "dragEnd" && !e.cancelled && e.held < 0.5 && Math.hypot(e.x - e.startX, e.y - e.startY) < 24 * frame().scale)) doDrop();
-});
+  if (e.type === "tap") doDrop();
+}, { slop: 24 });
 
 // ------------------------------------------------------------------ boot and lifecycle
 let lookKey = "";
@@ -468,7 +473,6 @@ onUpdate((dt) => {
   applyLook();
   audio.update();
   const t0 = now();
-  if (app.toast && t0 > app.toast.until) app.toast = null;
   if (app.caption && t0 > app.caption.until) app.caption = null;
 });
 onRender((alpha) => {

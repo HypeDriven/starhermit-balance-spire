@@ -1,8 +1,8 @@
 // The browser build's DOM shell (index.html + css/style.css) as starhermit:ui,
 // built every frame: the HUD (objective and stage, Height / Score / Streak and
 // the ruleset's Drops left / Time / Spare slabs), the action tray (Drop, Hint,
-// Undo, Pause with their keys), the countdown numeral, the caption strip and
-// the toast over the spire, and the full-window screens (title over its key
+// Undo, Pause with their keys), the countdown numeral, the caption strip
+// over the spire, and the full-window screens (title over its key
 // art, mode cards, setup with its paged stage list, pause, results with the
 // score table, settings, help, the device board). The browser's media
 // queries are the layouts picked by the window's logical size: wide, phone
@@ -158,13 +158,6 @@ export function drawScreens(): void {
         para(app.caption!.text, Math.min(L.lw * 0.8, 520), "caption", "caption-text");
       });
     }
-  }
-  if (app.toast) {
-    ui.place("toast", { anchor: "top", x: 0, y: inRound && !app.screen ? (L.narrow ? 120 : 76) : 12 }, () => {
-      const w = Math.min(34 * 16, L.lw * 0.92);
-      if (labelWidth(app.toast!.text, "toast") + 40 <= w) ui.style("toast").label(app.toast!.text);
-      else ui.style("toast").paragraph(app.toast!.text, w - 40);
-    });
   }
   switch (app.screen) {
     case "title": titleScreen(L); break;

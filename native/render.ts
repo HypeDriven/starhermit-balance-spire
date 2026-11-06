@@ -15,8 +15,8 @@
 //   same curve, tints and vignette.
 // - The sky dome's GLSL ShaderMaterial is WGSL. The stars' and motes' point
 //   shaders (Points take no shader) are PointsMaterial with a soft round
-//   map: the twinkle is the points' vertex colors, updated per frame, and
-//   the motes are a ParticleEmitter.
+//   map on ParticleEmitters: the stars twinkle natively (a phase and a
+//   frequency each), at the positions their seed always gave.
 // - LineSegments (the moving slab's outline) do not exist: twelve thin boxes
 //   of one InstancedMesh along the slab's edges.
 // - The skyline's per-face material array (lit windows on the sides only) is
@@ -25,15 +25,15 @@
 //   The window texture is a DataTexture (sRGB bytes, as the
 //   CanvasTexture with SRGBColorSpace was).
 import {
-  ACESFilmicToneMapping, AdditiveBlending, BackSide, BoxGeometry, BufferAttribute, BufferGeometry, Color,
+  ACESFilmicToneMapping, AdditiveBlending, BackSide, BoxGeometry, BufferGeometry, Color,
   CylinderGeometry, DataTexture, DirectionalLight, Fog, Group, HemisphereLight, InstancedMesh,
   Matrix4, Mesh, MeshBasicMaterial, MeshLambertMaterial, MeshPhysicalMaterial, MeshStandardMaterial,
-  PCFSoftShadowMap, PMREMGenerator, PerspectiveCamera, RoomEnvironment, PlaneGeometry, Points, PointsMaterial, RepeatWrapping, RoundedBoxGeometry,
+  PCFSoftShadowMap, PMREMGenerator, PerspectiveCamera, RoomEnvironment, PlaneGeometry, PointsMaterial, RepeatWrapping, RoundedBoxGeometry,
   SRGBColorSpace, ShaderMaterial, SphereGeometry, TextureLoader, TorusGeometry, Vector3, renderer, scene,
   ParticleEmitter, tween,
 } from "starhermit:scene";
 import type { Material, MaterialHooks, Texture } from "starhermit:scene";
-import { frame as engineFrame } from "starhermit:engine";
+import { createRandom, frame as engineFrame } from "starhermit:engine";
 import { Rules, type RngStream, type RulesEvent, type State } from "./classic.ts";
 import { MOTE_MAX, STAR_MAX, moteCount, starCount, type Look } from "./quality.ts";
 
@@ -59,14 +59,10 @@ let lastState: State | null = null;
 const _m = new Matrix4();
 
 // Deterministic cosmetic PRNG (stars, windows), independent of gameplay streams.
-// Kept rather than createRandom: its sequence is the skyline, stars and windows players see.
+// mulberry32: its sequence is the skyline, stars and windows players see.
 function mulberry(seed: number): () => number {
-  return () => {
-    seed |= 0; seed = (seed + 0x6d2b79f5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
+  const r = createRandom(seed, { algorithm: "mulberry32" });
+  return () => r.float();
 }
 
 // --- lights ----------------------------------------------------------------------
@@ -293,30 +289,39 @@ function dotTexture(): DataTexture {
   dotTex = new DataTexture(px, n, n);
   return dotTex;
 }
-const starBase = new Float32Array(STAR_MAX * 3);
-const starPhase = new Float32Array(STAR_MAX);
-const starColor = new Float32Array(STAR_MAX * 3);
+// Stars lie where the seed puts them, whichever count the level asks for.
+const starAt = new Float32Array(STAR_MAX * 3);
 {
   const rnd = mulberry(0x5ba1);
   for (let i = 0; i < STAR_MAX; i++) {
     const ang = rnd() * PI * 2, r = 60 + rnd() * 60;
-    starBase[i * 3] = Math.cos(ang) * r;
-    starBase[i * 3 + 1] = 12 + Math.pow(rnd(), 0.7) * 70;
-    starBase[i * 3 + 2] = Math.sin(ang) * r;
-    starPhase[i] = rnd();
+    starAt[i * 3] = Math.cos(ang) * r;
+    starAt[i * 3 + 1] = 12 + Math.pow(rnd(), 0.7) * 70;
+    starAt[i * 3 + 2] = Math.sin(ang) * r;
+    rnd(); // once each star's phase: the rest of the sequence stays
   }
-  starColor.fill(1);
 }
-const starGeo = new BufferGeometry();
-starGeo.setAttribute("position", new BufferAttribute(starBase, 3));
-starGeo.setAttribute("color", new BufferAttribute(starColor, 3));
-const starMat = new PointsMaterial({ map: dotTexture(), size: 0.5, color: 0xdfe6ff, opacity: 0.85, transparent: true, depthWrite: false, blending: AdditiveBlending, fog: false, vertexColors: true });
-const stars = new Points(starGeo, starMat);
+const starMat = new PointsMaterial({ map: dotTexture(), size: 0.5, color: 0xdfe6ff, opacity: 0.85, transparent: true, depthWrite: false, blending: AdditiveBlending, fog: false });
+const STAR_LIFE = 3600; // the longest life an emitter gives; setStars starts them again before it ends
+const stars = new ParticleEmitter({ capacity: STAR_MAX, material: starMat, seed: 0x5ba1, space: "local", life: STAR_LIFE });
+let starAge = 0;
+/** `count` stars, twinkling 1 − 0.55·w at 0.19–0.51 Hz, or steady when nothing animates. */
+function setStars(count: number, twinkling: boolean): void {
+  stars.visible = count > 0;
+  stars.clear();
+  starAge = 0;
+  stars.set({ twinkle: twinkling ? { frequency: [0.19, 0.51], opacity: 0.55 } : null });
+  for (let i = 0; i < count; i++) {
+    stars.burst(1, [starAt[i * 3]!, starAt[i * 3 + 1]!, starAt[i * 3 + 2]!]);
+    if (i % 256 === 255) stars.prewarm(0.001); // a step takes at most 256 waiting bursts, the rest are dropped
+  }
+}
 const moteMat = new PointsMaterial({ map: dotTexture(), size: 0.12, color: 0xffd9a0, opacity: 0.55, transparent: true, depthWrite: false, blending: AdditiveBlending, fog: false });
 // The motes rise round the tower top, in a band that follows the camera (frame()).
 const motes = new ParticleEmitter({
   capacity: MOTE_MAX, material: moteMat, seed: 0x5ba1, space: "local", shape: "box", extent: [4.4, 3.5, 4.4],
 });
+let motesWarmIn = 0;
 /** Rising, or still under reduced motion; `count` motes alive at once. */
 function setMotes(count: number): void {
   motes.visible = count > 0;
@@ -324,8 +329,9 @@ function setMotes(count: number): void {
   if (!count) { motes.rate = 0; return; }
   motes.set(reducedMotion
     ? { velocity: [0, 0, 0], velocitySpread: 0, life: 3600, rate: 0 }
-    : { velocity: [0, 0.35, 0], velocitySpread: [0.07, 0.175, 0.07], life: [2, 26], rate: count / 14 });
-  motes.burst(count);
+    : { velocity: [0, 0.35, 0], velocitySpread: [0.07, 0.175, 0.07], life: [6, 14], rate: count / 10 });
+  if (reducedMotion) motes.burst(count);
+  else motesWarmIn = 2; // set() reaches the emitter at the scene's sync, prewarm runs at once: after that
 }
 stars.frustumCulled = false;
 
@@ -392,8 +398,7 @@ export function applyLook(next: Look): void {
   applyEnvMaps();
   applyBackground();
   if (skylineKey !== `${next.detailed}:${next.budget.skyline}`) buildSkyline();
-  stars.geometry.setDrawRange(0, starCount(next));
-  stars.visible = starCount(next) > 0;
+  setStars(starCount(next), next.animated && !reducedMotion);
   setMotes(moteCount(next));
   // Post effects, as the browser build's composer chain, with the level's effects (levelSettings()):
   // which run, AO's resolution and samples, bloom's resolution. Full-resolution AO (the engine's
@@ -455,7 +460,7 @@ export function setTheme(palette: Palette, decorRng: RngStream | null): void {
 export function setReducedMotion(on: boolean): void {
   if (on === reducedMotion) return;
   reducedMotion = on;
-  if (look) setMotes(moteCount(look));
+  if (look) { setMotes(moteCount(look)); setStars(starCount(look), look.animated && !on); }
 }
 export function setHintVisible(on: boolean): void {
   hintOn = on;
@@ -644,17 +649,9 @@ export function frame(dtRaw: number): void {
   skyDome.position.copy(camera.position);
   skyUniforms.uTime.value = time;
   skyUniforms.uBands.value = look.animated ? 1 : 0;
-  const ns = starCount(look);
-  if (ns > 0) {
-    for (let i = 0; i < ns; i++) {
-      const ph = starPhase[i]!;
-      const a = animate ? 1 - 0.55 * (0.5 + 0.5 * Math.sin(time * (1.2 + ph * 2) + ph * 40)) : 1;
-      starColor[i * 3] = starColor[i * 3 + 1] = starColor[i * 3 + 2] = a;
-    }
-    const attr = (starGeo.getAttribute("color") as BufferAttribute);
-    attr.array = starColor;
-    attr.needsUpdate = true;
-  }
+  starAge += Math.max(0, dtRaw);
+  if (starAge > STAR_LIFE - 60) setStars(starCount(look), animate);
+  if (motesWarmIn > 0 && --motesWarmIn === 0) motes.prewarm(14); // as if it had been rising all along
   motes.position.y = camY - 0.5;
   if (movingSlab.visible && !flashing.size) lit(movingSlab).emissiveIntensity = animate ? 0.5 + 0.1 * Math.sin(time * 3.2) : 0.5;
 }
