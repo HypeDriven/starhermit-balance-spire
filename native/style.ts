@@ -1,3 +1,5 @@
+// localization-runtime:attached
+import { localizedFont as __l10nFont, setLocalizedStyles as __l10nStyles } from "./l10n/font.ts";
 // The look of the menus and HUD: the browser build's style sheet, rewritten
 // class-based in tools/ui-style.css and converted once with `starhermit css`
 // into assets/ui-style.json (`npm run css`), registered at start with the
@@ -19,10 +21,10 @@ export function initStyles(): void {
   });
   ui.setTokens(css.tokens);
   ui.setAnimations(css.animations);
-  ui.setStyles({
+  __l10nStyles({
     ...css.styles,
     // Text-style symbols from the engine's emoji font, the same glyph everywhere (`starhermit css` drops this family).
-    ".stars": { text: { color: "$accent", font: "StarHermit Emoji" } },
+    ".stars": { text: { color: "$accent", font: __l10nFont("StarHermit Emoji") } },
     label: { text: { color: "$ink" } },
     paragraph: { text: { color: "$ink" } },
     checkbox: {
