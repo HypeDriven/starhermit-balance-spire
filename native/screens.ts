@@ -1,3 +1,4 @@
+import { bindings } from "starhermit:input";
 import { localizedStyle as __l10nStyle } from "./l10n/font.ts";
 // localization-runtime:attached
 import { openLocalizedOptions as __l10nOptions } from "./l10n/menu.ts";
@@ -147,7 +148,7 @@ function firstLabel(name: ScreenName): string | null {
   }
 }
 
-export function drawScreens(): void {
+function drawScreensImmediate(): void {
   const L = layoutNow();
   const r = Session.round;
   // A screen that just opened focuses its first control once its layout has
@@ -544,4 +545,11 @@ function boardScreen(L: Layout): void {
     }
     button({ id: "btn-board-back", text: t("back"), style: ["btn", "btn-subtle"], act: back });
   }, cw(L, 560));
+}
+
+export function drawScreens(): void {
+  if (app.screen !== "help") { drawScreensImmediate(); return; }
+  const actions = ["drop","pause","back","undo","hint","camera"];
+  const version = JSON.stringify([(app as any).settings ?? (app as any).options ?? {}, (platform as any).options ?? {}, actions.map((action) => bindings(action))]);
+  ui.retain!("help-screen", version, drawScreensImmediate);
 }

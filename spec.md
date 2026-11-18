@@ -9,7 +9,7 @@ Balance Spire is a one-input timing game: a luminous stone slab slides back and 
 | Pitch | Drop sliding slabs dead-centre to raise a glowing stone spire; every miss narrows the next landing. |
 | Genre | Timing / stacking, single player, asynchronous ranked comparison. |
 | Session | 1–3 minutes per journey stage; 2–6 minutes for a daily, challenge or endless run. |
-| Platforms | A StarHermit engine script game (engine 1.39.0, `engine.minor=39`): natively in the StarHermit client and in desktop and mobile browsers on the engine's web runtime, from one package. |
+| Platforms | A StarHermit engine script game (engine 1.44.1, `engine.minor=44`): natively in the StarHermit client and in desktop and mobile browsers on the engine's web runtime, from one package. |
 | Rendering | `starhermit:scene` (the three.js model) for the spire, `starhermit:ui` for the HUD, tray and screens, `starhermit:draw` for the title's key art. |
 | Determinism | Integer milli-units, 60 ticks/s, closed-form slab motion, seeded PRNG; the round clock is the runtime's fixed steps; every ranked run keeps a replayable command log. |
 
@@ -302,3 +302,11 @@ QA bar: the first stage's intro is toasted and announced before play; every scre
 The string tables include complete regional variants for `fr-BE`, `de-BE`, `en-SG`, `en-HK`, `en-BQ`, `es-CO`, `de-IT`, `fr-IT`, `es-CL`, `es-AR`, `es-EC`, `de-BR`. These reuse the corresponding existing translations in their language family. The runtime can resolve the exact regional tag. Language selection is available from the game’s Options panel or F2 and is saved per player in `ui.language`. Changes apply during play. Additional national, regional and indigenous language packs are only shipped once every English message has a translation with intact placeholders and markup. Complete additional language tables: `nl-BE`, `zh-SG`, `ms-SG`, `ta-SG`, `zh-HK`, `yue-HK`, `nl-NL`, `fi-FI`, `sv-FI`, `et-EE`, `id-ID`, `vi-VN`, `ja-JP`, `da-DE`, `lb-BE`, `eu-FR`, `ca-FR`, `oc-FR`, `ca-IT`, `oc-IT`, `ru-FI`, `ca-ES`, `eu-ES`, `gl-ES`, `ru-EE`, `su-ID`, `km-VN`, `co-FR`, `sl-IT`, `fur-IT`, `bew-ID`.
 
 <!-- regional-localization:end -->
+
+Cosmetic particle emitters use native GPU particles with automatic CPU fallback on devices or graphics tiers without GPU particle support.
+
+## Engine 1.44.1
+
+Browser play uses the WebGPU-only StarHermit 1.44.1 web runtime. Automatic ray-traced shadows are enabled on supported Vulkan devices, with mapped-shadow fallbacks elsewhere. Packaging creates block-compressed runtime textures and compressed glTF copies, retaining original image fallbacks.
+
+The help screen replays through retained native UI while its contents, options, layout and key bindings are unchanged.

@@ -15,7 +15,7 @@
 //   same curve, tints and vignette.
 // - The sky dome's GLSL ShaderMaterial is WGSL. The stars' and motes' point
 //   shaders (Points take no shader) are PointsMaterial with a soft round
-//   map on ParticleEmitters: the stars twinkle natively (a phase and a
+//   map on GPUParticleEmitters: the stars twinkle natively (a phase and a
 //   frequency each), at the positions their seed always gave.
 // - LineSegments (the moving slab's outline) do not exist: twelve thin boxes
 //   of one InstancedMesh along the slab's edges.
@@ -25,13 +25,9 @@
 //   The window texture is a DataTexture (sRGB bytes, as the
 //   CanvasTexture with SRGBColorSpace was).
 import {
-  ACESFilmicToneMapping, AdditiveBlending, BackSide, BoxGeometry, BufferGeometry, Color,
-  CylinderGeometry, DataTexture, DirectionalLight, Fog, Group, HemisphereLight, InstancedMesh,
-  Matrix4, Mesh, MeshBasicMaterial, MeshLambertMaterial, MeshPhysicalMaterial, MeshStandardMaterial,
-  PCFSoftShadowMap, PMREMGenerator, PerspectiveCamera, RoomEnvironment, PlaneGeometry, PointsMaterial, RepeatWrapping, RoundedBoxGeometry,
-  SRGBColorSpace, ShaderMaterial, SphereGeometry, TextureLoader, TorusGeometry, Vector3, renderer, scene,
-  ParticleEmitter, tween,
+  ACESFilmicToneMapping, AdditiveBlending, BackSide, BoxGeometry, BufferGeometry, Color, CylinderGeometry, DataTexture, DirectionalLight, Fog, Group, HemisphereLight, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial, MeshLambertMaterial, MeshPhysicalMaterial, MeshStandardMaterial, PCFSoftShadowMap, PMREMGenerator, PerspectiveCamera, RoomEnvironment, PlaneGeometry, PointsMaterial, RepeatWrapping, RoundedBoxGeometry, SRGBColorSpace, ShaderMaterial, SphereGeometry, TextureLoader, TorusGeometry, Vector3, renderer, scene, tween,
 } from "starhermit:scene";
+import { GPUParticleEmitter } from "starhermit:particles";
 import type { Material, MaterialHooks, Texture } from "starhermit:scene";
 import { createRandom, frame as engineFrame } from "starhermit:engine";
 import { Rules, type RngStream, type RulesEvent, type State } from "./classic.ts";
@@ -303,7 +299,7 @@ const starAt = new Float32Array(STAR_MAX * 3);
 }
 const starMat = new PointsMaterial({ map: dotTexture(), size: 0.5, color: 0xdfe6ff, opacity: 0.85, transparent: true, depthWrite: false, blending: AdditiveBlending, fog: false });
 const STAR_LIFE = 3600; // the longest life an emitter gives; setStars starts them again before it ends
-const stars = new ParticleEmitter({ capacity: STAR_MAX, material: starMat, seed: 0x5ba1, space: "local", life: STAR_LIFE });
+const stars = new GPUParticleEmitter({ capacity: STAR_MAX, material: starMat, seed: 0x5ba1, space: "local", life: STAR_LIFE });
 let starAge = 0;
 /** `count` stars, twinkling 1 − 0.55·w at 0.19–0.51 Hz, or steady when nothing animates. */
 function setStars(count: number, twinkling: boolean): void {
@@ -318,7 +314,7 @@ function setStars(count: number, twinkling: boolean): void {
 }
 const moteMat = new PointsMaterial({ map: dotTexture(), size: 0.12, color: 0xffd9a0, opacity: 0.55, transparent: true, depthWrite: false, blending: AdditiveBlending, fog: false });
 // The motes rise round the tower top, in a band that follows the camera (frame()).
-const motes = new ParticleEmitter({
+const motes = new GPUParticleEmitter({
   capacity: MOTE_MAX, material: moteMat, seed: 0x5ba1, space: "local", shape: "box", extent: [4.4, 3.5, 4.4],
 });
 let motesWarmIn = 0;
@@ -326,7 +322,7 @@ let motesWarmIn = 0;
 function setMotes(count: number): void {
   motes.visible = count > 0;
   motes.clear();
-  if (!count) { motes.rate = 0; return; }
+  if (!count) { motes.set({ rate: 0 }); return; }
   motes.set(reducedMotion
     ? { velocity: [0, 0, 0], velocitySpread: 0, life: 3600, rate: 0 }
     : { velocity: [0, 0.35, 0], velocitySpread: [0.07, 0.175, 0.07], life: [6, 14], rate: count / 10 });
