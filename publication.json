@@ -12,7 +12,7 @@
     "metadataSource": "starhermit.txt",
     "createdAt": "2026-09-01T07:00:57.784739+00:00",
     "coverArtSource": "manifest",
-    "coverArtUpdatedAt": "2026-11-23T17:01:16.894046+00:00",
+    "coverArtUpdatedAt": "2026-11-26T11:41:12.547106+00:00",
     "submittedByUserId": "2712e04e-461b-4d23-81ae-e40b429128a8",
     "submittedByUsername": "starhermit",
     "hosting": {
@@ -22,9 +22,9 @@
       "pinnedCommitSha": null,
       "deployedCommitSha": null,
       "deployError": null,
-      "deployedAt": "2026-11-23T17:01:16.882909+00:00",
+      "deployedAt": "2026-11-26T11:41:11.344879+00:00",
       "externalLaunchUrl": null,
-      "engineVersion": "1.47.0",
+      "engineVersion": "1.50.0",
       "deployWarning": null
     },
     "description": "Time each sliding slab to build a taller tower, keeping your landings precise as the platform narrows.",
@@ -36,19 +36,19 @@
     "links": [],
     "isDisabled": false
   },
-  "publishedAt": "2026-11-23T17:01:17.010Z",
-  "sourceCommit": "fa2ad91f923caefedaed66791125f218aa827bf0",
-  "bytesReceived": 2540475,
-  "archiveSha256": "b78145b3b743106635818f2cc89ac44a86bd7bced79f9d9c788101e32db253f2",
+  "publishedAt": "2026-11-26T11:41:12.689Z",
+  "sourceCommit": "8d37ad75a53ffff0e3ba9150bddb2803c9bfdb63",
+  "bytesReceived": 2540462,
+  "archiveSha256": "fb4fd04e564130539e474175a2bf6e8e21c878f7b6a016f69c6b0a0f951e6329",
   "indexSha256": "f8a968fe30ce35654877c652ea33a4f53557a0b05f0226a4310151042bc5c468",
   "result": {
     "clientPublished": true,
     "serverImageLoaded": false,
     "imageDigest": null,
-    "bytesReceived": 2540475,
+    "bytesReceived": 2540462,
     "mode": "replace",
     "filesRemoved": 0,
-    "engineVersion": "1.47.0",
+    "engineVersion": "1.50.0",
     "deployWarning": null
   },
   "liveVerification": {
