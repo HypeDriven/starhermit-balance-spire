@@ -9,7 +9,7 @@ Balance Spire is a one-input timing game: a luminous stone slab slides back and 
 | Pitch | Drop sliding slabs dead-centre to raise a glowing stone spire; every miss narrows the next landing. |
 | Genre | Timing / stacking, single player, asynchronous ranked comparison. |
 | Session | 1–3 minutes per journey stage; 2–6 minutes for a daily, challenge or endless run. |
-| Platforms | A StarHermit engine script game (engine 1.47.0, `engine.minor=47`): natively in the StarHermit client and in desktop and mobile browsers on the engine's web runtime, from one package. |
+| Platforms | A StarHermit engine script game (engine 1.50.0, `engine.minor=50`): natively in the StarHermit client and in desktop and mobile browsers on the engine's web runtime, from one package. |
 | Rendering | `starhermit:scene` (the three.js model) for the spire, `starhermit:ui` for the HUD, tray and screens, `starhermit:draw` for the title's key art. |
 | Determinism | Integer milli-units, 60 ticks/s, closed-form slab motion, seeded PRNG; the round clock is the runtime's fixed steps; every ranked run keeps a replayable command log. |
 
@@ -305,9 +305,9 @@ The string tables include complete regional variants for `fr-BE`, `de-BE`, `en-S
 
 Cosmetic particle emitters use native GPU particles with automatic CPU fallback on devices or graphics tiers without GPU particle support.
 
-## Engine 1.47.0
+## Engine 1.50.0
 
-Browser play uses the WebGPU-only StarHermit 1.47.0 web runtime. Automatic ray-traced shadows are enabled on supported Vulkan devices, with mapped-shadow fallbacks elsewhere. Packaging creates block-compressed runtime textures and compressed glTF copies, retaining original image fallbacks.
+Browser play uses the WebGPU-only StarHermit 1.50.0 web runtime. Automatic ray-traced shadows are enabled on supported Vulkan devices, with mapped-shadow fallbacks elsewhere. Packaging creates block-compressed runtime textures and compressed glTF copies, retaining original image fallbacks.
 
 The help screen replays through retained native UI while its contents, options, layout and key bindings are unchanged.
 
