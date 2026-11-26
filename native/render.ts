@@ -140,7 +140,10 @@ function refreshStone(): void {
 const skyUniforms = {
   uTop: { value: new Color(0x2c3a5e) }, uBot: { value: new Color(0xe8a06a) },
   uGlow: { value: new Color(0xffd9a0) }, uSun: { value: KEY_DIR.clone() },
-  uTime: { value: 0 }, uBands: { value: 1 },
+  uBands: { value: 1 },
+  // The bands drift on the engine's clock (frame_time(), host API 1.49) less uOffset; while
+  // nothing animates (low tier, Reduced motion) they hold at uFrozen. Written only on a change.
+  uRun: { value: 0 }, uOffset: { value: 0 }, uFrozen: { value: 0 },
 };
 const SKY_FRAGMENT = `
 fn fragment(f: Fragment) -> vec4f {
@@ -155,7 +158,8 @@ fn fragment(f: Fragment) -> vec4f {
   col = col + uniforms.uGlow * (pow(sun, 18.0) * 0.28 + pow(sun, 3.0) * 0.06);
   // Faint drifting cloud bands (static when animation is off).
   let a = atan2(d.z, d.x);
-  var band = sin(a * 5.0 + uniforms.uTime * 0.03 + sin(h * 14.0 + a * 2.0) * 1.3) * 0.5 + 0.5;
+  let t = select(uniforms.uFrozen, frame_time() - uniforms.uOffset, uniforms.uRun > 0.5);
+  var band = sin(a * 5.0 + t * 0.03 + sin(h * 14.0 + a * 2.0) * 1.3) * 0.5 + 0.5;
   band = band * smoothstep(0.02, 0.18, h) * (1.0 - smoothstep(0.25, 0.55, h));
   col = mix(col, col * 1.12 + uniforms.uBot * 0.05, band * 0.5 * uniforms.uBands);
   return vec4f(col, 1.0);
@@ -166,9 +170,20 @@ const skyDome = new Mesh(new SphereGeometry(150, 32, 16), new ShaderMaterial({
 skyDome.renderOrder = -10;
 skyDome.frustumCulled = false;
 skyDome.noAO = true;
+/** Start or hold the sky's drift where it is (the clock is the engine's frame().time). */
+function runSky(run: boolean): void {
+  if ((skyUniforms.uRun.value > 0.5) === run) return;
+  const now = engineFrame().time;
+  if (run) skyUniforms.uOffset.value = now - skyUniforms.uFrozen.value;
+  else skyUniforms.uFrozen.value = now - skyUniforms.uOffset.value;
+  skyUniforms.uRun.value = run ? 1 : 0;
+}
 
 // --- gameplay objects --------------------------------------------------------------
+// Still objects (host API 1.42 `movable`; from 1.49 the sync reads a still object's transform only
+// when told it moved: matrixWorldNeedsUpdate): the placed slabs, the plinth, its inlay, the skyline.
 const towerGroup = new Group();
+towerGroup.movable = false;
 const slabMeshes: Mesh[] = []; // one mesh per placed slab (pooled, hidden rather than disposed)
 let movingSlab: Mesh;
 // The moving slab's outline (the browser build's EdgesGeometry lines).
@@ -189,12 +204,14 @@ const groundMat = new MeshStandardMaterial({ color: 0x241f2e, roughness: 0.92, e
 const ground = new Mesh(new CylinderGeometry(9, 11, 0.8, 48), groundMat);
 ground.position.y = -0.45;
 ground.receiveShadow = true;
+ground.movable = false;
 // Luminous inlay ring on the plinth top (detailed tier; blooms softly).
 const rimGlowMat = new MeshBasicMaterial({ color: 0xffd9a0 });
 const rimGlow = new Mesh(new TorusGeometry(8.6, 0.025, 6, 128), rimGlowMat);
 rimGlow.rotation.x = -PI / 2;
 rimGlow.position.y = -0.04;
 rimGlow.noAO = true;
+rimGlow.movable = false;
 
 interface Debris { mesh: Mesh; active: boolean; vx: number; vy: number; vz: number }
 const debris: Debris[] = [];
@@ -251,6 +268,7 @@ function buildSkyline(): void {
     mat.hooks = ROOF_HOOK;
   }
   const inst = new InstancedMesh(new BoxGeometry(1, 1, 1), mat, count);
+  inst.movable = false;
   for (let i = 0; i < count; i++) {
     const ang = (i / count) * PI * 2 + rng.next() * 0.08;
     const r = 16 + rng.next() * 22;
@@ -483,8 +501,14 @@ export function syncState(state: State, alpha: number): void {
     if (i >= level) { mesh.visible = false; continue; }
     const s = state.slabs[i]!;
     mesh.visible = true;
-    mesh.scale.set(s.w / MU, 1, s.d / MU);
-    mesh.position.set(s.x / MU, i * SLAB_H + SLAB_H / 2, s.z / MU);
+    // A still slab moves only when the tower changes (a drop, an undo, a new round): say so then.
+    const x = s.x / MU, y = i * SLAB_H + SLAB_H / 2, z = s.z / MU, sx = s.w / MU, sz = s.d / MU;
+    const p = mesh.position, k = mesh.scale;
+    if (p.x !== x || p.y !== y || p.z !== z || k.x !== sx || k.z !== sz) {
+      k.set(sx, 1, sz);
+      p.set(x, y, z);
+      mesh.matrixWorldNeedsUpdate = true;
+    }
     // Don't stomp an in-flight placement flash.
     if (!flashing.has(mesh)) lit(mesh).emissiveIntensity = s.perfect && i > 0 ? 0.45 : 0.12;
   }
@@ -644,8 +668,9 @@ export function frame(dtRaw: number): void {
   const animate = look.animated && !reducedMotion;
   if (animate) time += dt;
   skyDome.position.copy(camera.position);
-  skyUniforms.uTime.value = time;
-  skyUniforms.uBands.value = look.animated ? 1 : 0;
+  runSky(animate);
+  const bands = look.animated ? 1 : 0;
+  if (skyUniforms.uBands.value !== bands) skyUniforms.uBands.value = bands;
   starAge += Math.max(0, dtRaw);
   if (starAge > STAR_LIFE - 60) setStars(starCount(look), animate);
   if (motesWarmIn > 0 && --motesWarmIn === 0) motes.prewarm(14); // as if it had been rising all along

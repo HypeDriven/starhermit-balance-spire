@@ -14,8 +14,8 @@ import { withLanguageRender as __l10nRender } from "./l10n/menu.ts";
 // The round clock is the runtime's fixed steps (60 a second, the rules' tick
 // rate): ticks advance only while the round is active and the game runs, so
 // pausing, a hidden window and a slow frame never move the slab.
-import { frame, levelSettings, onFixedUpdate, onQuit, onRender, onResume, onStart, onSuspend, onUpdate, onPreferencesChange, preferences, setFixedRate } from "starhermit:engine";
-import { bindingLabel, onAction, onGesture, vibrate } from "starhermit:input";
+import { frame, levelSettings, onFixedUpdate, onQuit, onRender, onResume, onStart, onSuspend, onUpdate, onPreferencesChange, preferences, setFixedRate, setTargetFps } from "starhermit:engine";
+import { bindingLabel, onAction, onGesture, primaryPointer, vibrate } from "starhermit:input";
 import * as ui from "starhermit:ui";
 import { onPlayerChange, onSessionEnded } from "starhermit:platform";
 import { Content, RNG, Rules, Session, type Cfg, type Lesson, type Results, type Round, type RulesEvent, type State } from "./classic.ts";
@@ -432,6 +432,18 @@ function applyLook(): void {
   render.applyLook(lookFor(levelSettings(f.level)));
 }
 
+/** The game's frame cap (host API 1.49 setTargetFps, set only on a change): 30 on the title (its
+ * backdrop covers the spire) and on phone levels (quantum to cellular) under a finger, where even
+ * 33 ms frames beat 33/50 ms jitter; none otherwise. The engine sets it aside while its menus are
+ * open, and the player's frame-rate limit still applies. */
+let frameCap = -1;
+function capFrames(): void {
+  const cap = app.screen === "title" || (frame().levelIndex <= 3 && primaryPointer() === "coarse") ? 30 : 0;
+  if (cap === frameCap) return;
+  frameCap = cap;
+  setTargetFps(cap || null);
+}
+
 onStart(() => {
   showCursor();
   setFixedRate(60);
@@ -474,6 +486,7 @@ let frameDt = 0;
 onUpdate((dt) => {
   frameDt = dt;
   applyLook();
+  capFrames();
   audio.update();
   const t0 = now();
   if (app.caption && t0 > app.caption.until) app.caption = null;
