@@ -9,7 +9,7 @@ Balance Spire is a one-input timing game: a luminous stone slab slides back and 
 | Pitch | Drop sliding slabs dead-centre to raise a glowing stone spire; every miss narrows the next landing. |
 | Genre | Timing / stacking, single player, asynchronous ranked comparison. |
 | Session | 1–3 minutes per journey stage; 2–6 minutes for a daily, challenge or endless run. |
-| Platforms | A StarHermit engine script game (engine 1.52.0, `engine.minor=52`): natively in the StarHermit client and in desktop and mobile browsers on the engine's web runtime, from one package. |
+| Platforms | A StarHermit engine script game (engine 1.53.0, `engine.minor=53`): natively in the StarHermit client and in desktop and mobile browsers on the engine's web runtime, from one package. |
 | Rendering | `starhermit:scene` (the three.js model) for the spire, `starhermit:ui` for the HUD, tray and screens, `starhermit:draw` for the title's key art. |
 | Determinism | Integer milli-units, 60 ticks/s, closed-form slab motion, seeded PRNG; the round clock is the runtime's fixed steps; every ranked run keeps a replayable command log. |
 
@@ -305,16 +305,18 @@ The string tables include complete regional variants for `fr-BE`, `de-BE`, `en-S
 
 Cosmetic particle emitters use native GPU particles with automatic CPU fallback on devices or graphics tiers without GPU particle support.
 
-## Engine 1.52.0
+## Engine 1.53.0
 
-Browser play uses the StarHermit 1.52.0 web runtime on WebGPU, or WebGL 2 where WebGPU is missing. Automatic ray-traced shadows are enabled on supported Vulkan devices, with mapped-shadow fallbacks elsewhere. Packaging creates block-compressed runtime textures and compressed glTF copies, retaining original image fallbacks.
+Browser play uses the StarHermit 1.53.0 web runtime on WebGPU, or WebGL 2 where WebGPU is missing. Automatic ray-traced shadows are enabled on supported Vulkan devices, with mapped-shadow fallbacks elsewhere. Packaging creates block-compressed runtime textures and compressed glTF copies, retaining original image fallbacks.
 
 The help screen replays through retained native UI while its contents, options, layout and key bindings are unchanged.
 
 Browser rendering uses the engine's asynchronous pipeline creation so newly encountered materials do not stall the page. Native play retains the engine's synchronous pipeline behavior.
 
-**Frame rate (host API 1.52 `setTargetFps`).** The game caps itself at 30 frames a second on the title (its backdrop covers the spire) and, under a finger (`primaryPointer() === "coarse"`), on the phone graphics levels quantum to cellular (`levelIndex` ≤ 3), where even 33 ms frames replace 33/50 ms jitter and Auto measures against 30; elsewhere there is no game cap. The round clock stays 60 fixed steps a second whatever the frame rate. The engine sets the cap aside while its menus are open, and the player's Frame rate limit still applies.
+**Frame rate (host API 1.53 `setTargetFps`).** The game caps itself at 30 frames a second on the title (its backdrop covers the spire) and, under a finger (`primaryPointer() === "coarse"`), on the phone graphics levels quantum to cellular (`levelIndex` ≤ 3), where even 33 ms frames replace 33/50 ms jitter and Auto measures against 30; elsewhere there is no game cap. The round clock stays 60 fixed steps a second whatever the frame rate. The engine sets the cap aside while its menus are open, and the player's Frame rate limit still applies.
 
-**Still scenery and the engine clock (host API 1.52).** The placed slabs (their group), the plinth, its inlay and the skyline are `movable = false`; a placed slab's transform is written, with `matrixWorldNeedsUpdate`, only when the tower changes (a drop, an undo, a new round). The sky dome's drifting bands run on the engine's `frame_time()` less an offset, so its material is sent only when the drift starts or holds (Reduced motion, the low tier), not every frame.
+**Still scenery and the engine clock (host API 1.53).** The placed slabs (their group), the plinth, its inlay and the skyline are `movable = false`; a placed slab's transform is written, with `matrixWorldNeedsUpdate`, only when the tower changes (a drop, an undo, a new round). The sky dome's drifting bands run on the engine's `frame_time()` less an offset, so its material is sent only when the drift starts or holds (Reduced motion, the low tier), not every frame.
 
 Higher graphics tiers use native per-object motion blur for moving pieces and effects. Camera motion stays sharp, lower tiers omit the effect, and the runtime's Motion blur and Reduce motion preferences remain authoritative.
+
+On engine 1.53.0, browser play through WebGL 2 compiles a frame's shader programs together and holds that frame until they are linked, blends skinned meshes in one pass, reuses the window pass's depth, and uses a hardware WebGL 2 context when WebGPU's adapter is software.
