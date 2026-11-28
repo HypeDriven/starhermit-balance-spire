@@ -48,8 +48,6 @@ export function loadSfx(): void {
     loadClip(`sfx/${name}.opus`).then((c) => { clips.set(name, c); }, (e: unknown) => console.warn(`sfx ${name}: ${String(e)}`));
   }
   loadClip("sfx/ambience-skyline.opus").then((c) => { skylineClip = c; }, () => { /* keep the pad */ });
-  renderPad().then((c) => { padClip = c; }, (e: unknown) => console.warn(`pad: ${String(e)}`));
-  Promise.all(MUS_SCALE.map(renderNote)).then((c) => { notes = c; }, (e: unknown) => console.warn(`music: ${String(e)}`));
 }
 
 export function setCaptions(on: boolean): void { captionsOn = on; }
@@ -117,7 +115,18 @@ export function unlock(): void { started = true; }
 
 /** Each frame once the mixer runs: the beds as their clips are ready, then
  * the pad music's next voices every 1.4 s of mixer time. */
+let __bedsStarted = false;
+function startBeds(): void {
+  if (__bedsStarted) return;
+  __bedsStarted = true;
+  void (async () => {
+    renderPad().then((c) => { padClip = c; }, (e: unknown) => console.warn(`pad: ${String(e)}`));
+    Promise.all(MUS_SCALE.map(renderNote)).then((c) => { notes = c; }, (e: unknown) => console.warn(`music: ${String(e)}`));
+  })();
+}
+
 export function update(): void {
+  startBeds();
   if (context.state !== "running" || !started) return;
   try {
     if (ambience === 0 && padClip) {
